@@ -147,4 +147,3 @@ class LogHelper:
 
     def __update_timestamp(self):
         os.system(self.__signal_cmd)
-        with open()
