@@ -1,5 +1,5 @@
 
-IMGLIST = /home/fernando/radiation-benchmarks/data/networks_img_list/urban.street.100.txt
+IMGLIST = /home/fernando/git_research/radiation-benchmarks/data/networks_img_list/urban.street.100.txt
 MODEL = ResNet-50
 PRECISION = fp32
 ITERATIONS = 10

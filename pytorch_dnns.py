@@ -11,7 +11,7 @@ import torchvision
 
 import console_logger
 import dnn_log_helper as dnn_log_helper
-from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, load_image_list
+from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, load_image_list, BATCH_SIZE_GPU
 from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
 from common_tf_and_pt import parse_args, Timer
 
@@ -61,12 +61,9 @@ DNN_MODELS = {
 }
 
 
-def compare_output_with_gold(dnn_output_tensors: torch.tensor,
-                             dnn_golden_tensors: torch.tensor,
-                             dnn_type: DNNType, batch_size: int, batch_iteration: int) -> int:
+def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, dnn_type: DNNType,
+                             batch_size: int, setup_iteration: int, batch_iteration: int) -> int:
     output_errors = 0
-    print(dnn_output_tensors)
-    print(dnn_golden_tensors)
     if dnn_type == DNNType.CLASSIFICATION:
         pass
     elif dnn_type == DNNType.DETECTION:
@@ -84,10 +81,8 @@ def load_input_images_to_tensor(transforms: torchvision.transforms, image_list_p
     resized_images = list()
     for image in images:
         resized_images.append(transforms(image))
-    print(resized_images[0])
-    input_tensor = torch.stack(resized_images)
-
-    input_tensor = torch.split(input_tensor, batch_size).to(device)
+    input_tensor = torch.stack(resized_images).to(device)
+    input_tensor = torch.split(input_tensor, batch_size)
     timer.toc()
     logger.info(f"Input images loaded and resized successfully: {timer}")
     return input_tensor
@@ -104,15 +99,17 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
 
 def main():
     # Check the available device
-    device, batch_size = "cpu", 1
+    device, batch_size = "cpu", 5
     if torch.cuda.is_available():
         device = "cuda:0"
-        batch_size = 1
+        batch_size = BATCH_SIZE_GPU
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")
     output_logger = console_logger.ColoredLogger(main_logger_name)
     args, args_conf = parse_args()
+    for k, v in vars(args).items():
+        output_logger.debug(f"{k}:{v}")
     generate = args.generate
     iterations = args.iterations
     image_list_path = args.imglist
@@ -133,85 +130,93 @@ def main():
     timer.tic()
     input_list = load_input_images_to_tensor(transforms=transform, image_list_path=image_list_path,
                                              logger=output_logger, batch_size=batch_size, device=device)
-    input_list = input_list.to(device)
     timer.toc()
     output_logger.debug(f"Time necessary to load the inputs: {timer}")
 
-    dnn_gold_tensors = torch.empty(0)
+    dnn_gold_tensors = list()
     # Load if it is not a gold generating op
     timer.tic()
     if generate is False:
         dnn_gold_tensors = torch.load(gold_path)
+
     timer.toc()
     output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
 
     # Start the setup if it is not generate
-    if generate is False:
-        dnn_log_helper.start_log_file(bench_name=model_name, header=args_conf)
+    if generate:
+        dnn_log_helper.disable_logging()
+    dnn_log_helper.start_log_file(bench_name=model_name, header=args_conf)
 
     # Main setup loop
     setup_iteration = 0
-    while setup_iteration <= iterations:
-        total_errors = 0
-        # Loop over the input list
-        for batch_iteration, batched_input in enumerate(input_list):
-            timer.tic()
-            if generate is False:
+    with torch.no_grad():
+        while setup_iteration < iterations:
+            total_errors = 0
+            # Loop over the input list
+            for batch_iteration, batched_input in enumerate(input_list):
+                timer.tic()
                 dnn_log_helper.start_iteration()
-            current_output = dnn_model(batched_input)
-            if generate is False:
+                current_output = dnn_model(batched_input)
                 dnn_log_helper.end_iteration()
-            timer.toc()
-            output_logger.debug(
-                f"It:{setup_iteration} - input it: {batch_iteration} time necessary process an inference: {timer}")
+                timer.toc()
+                iteration_out = f"It:{setup_iteration} - input it:{batch_iteration}"
+                iteration_out += f" inference time:{timer}"
 
-            # Then compare the golden with the output
-            timer.tic()
-            errors = compare_output_with_gold(dnn_output_tensors=current_output, dnn_golden_tensors=dnn_gold_tensors,
-                                              dnn_type=dnn_type, batch_size=batch_size, batch_iteration=batch_iteration)
-            total_errors += errors
-            timer.toc()
-            output_logger.debug(
-                f"Iteration:{setup_iteration} time necessary compare the gold: {timer} errors: {errors}")
-        # Reload after error
-        if total_errors != 0:
-            del input_list
-            del dnn_model
-            dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
-            input_list = load_input_images_to_tensor(transforms=transform, image_list_path=image_list_path,
-                                                     logger=output_logger, batch_size=batch_size, device=device)
+                # Then compare the golden with the output
+                timer.tic()
+                errors = 0
+                if generate is False:
+                    current_gold = dnn_gold_tensors[batch_iteration]
+                    errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
+                                                      dnn_type=dnn_type, batch_size=batch_size,
+                                                      setup_iteration=setup_iteration, batch_iteration=batch_iteration)
+                else:
+                    dnn_gold_tensors.append(current_output.to("cpu"))
 
-        setup_iteration += 1
+                total_errors += errors
+                timer.toc()
+                iteration_out += f", gold compare time:{timer} errors:{errors}"
+                output_logger.debug(iteration_out)
+
+            # Reload after error
+            if total_errors != 0:
+                del input_list
+                del dnn_model
+                dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
+                input_list = load_input_images_to_tensor(transforms=transform, image_list_path=image_list_path,
+                                                         logger=output_logger, batch_size=batch_size, device=device)
+
+            setup_iteration += 1
     timer.tic()
     if generate:
+        # dnn_gold_tensors = torch.stack(dnn_gold_tensors)
         torch.save(dnn_gold_tensors, gold_path)
     timer.toc()
     output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
 
     # finish the logfile
-    if generate is False:
-        dnn_log_helper.end_log_file()
+    dnn_log_helper.end_log_file()
 
 
 if __name__ == '__main__':
     main()
 
-    ####################################################################################################################
-    # For the future
-    # "MaskR-CNNResNet-50FPN": {
-    #     "model": torchvision.models.detection.maskrcnn_resnet50_fpn,
-    #     "type": DNNType.DETECTION_SEGMENTATION
-    # },
-    # "KeypointR-CNNResNet-50FPN": {
-    #     "model": torchvision.models.detection.keypointrcnn_resnet50_fpn,
-    #     "type": DNNType.DETECTION_KEYPOINT
-    # },
-    #        SSD_MOBILENET_V2 : {
-    #         "model": torchvision.models.detection.ssd300_vgg16,
-    #         "type": DNNType.DETECTION
-    #     },
-    #
-    #     EFFICIENT_DET_LITE3: {
-    #         "model": torchvision.models.detection.ssd300_vgg16,
-    #         "type": DNNType.DETECTION
-    #     },
+####################################################################################################################
+# For the future
+# "MaskR-CNNResNet-50FPN": {
+#     "model": torchvision.models.detection.maskrcnn_resnet50_fpn,
+#     "type": DNNType.DETECTION_SEGMENTATION
+# },
+# "KeypointR-CNNResNet-50FPN": {
+#     "model": torchvision.models.detection.keypointrcnn_resnet50_fpn,
+#     "type": DNNType.DETECTION_KEYPOINT
+# },
+#        SSD_MOBILENET_V2 : {
+#         "model": torchvision.models.detection.ssd300_vgg16,
+#         "type": DNNType.DETECTION
+#     },
+#
+#     EFFICIENT_DET_LITE3: {
+#         "model": torchvision.models.detection.ssd300_vgg16,
+#         "type": DNNType.DETECTION
+#     },

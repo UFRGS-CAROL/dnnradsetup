@@ -16,6 +16,8 @@ ALL_DNNS = [RESNET_50, INCEPTION_V3, INCEPTION_B7,
             RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50,
             SSD_MOBILENET_V2, EFFICIENT_DET_LITE3]
 
+BATCH_SIZE_GPU = 5
+
 
 def parse_args():
     """ Parse the args and return a args.Namespace and the tostring from the args    """
@@ -37,7 +39,6 @@ def parse_args():
     # Check if it is only to generate the gold values
     if args.generate:
         args.iterations = 1
-
     args_text = " ".join([f"{k}={v}" for k, v in vars(args).items()])
     return args, args_text
 
