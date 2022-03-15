@@ -11,9 +11,9 @@ import torchvision
 
 import console_logger
 import dnn_log_helper as dnn_log_helper
-from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, load_image_list, BATCH_SIZE_GPU
+from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, BATCH_SIZE_GPU
 from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
-from common_tf_and_pt import parse_args, Timer
+from common_tf_and_pt import parse_args, Timer, load_image_list
 
 DNN_MODELS = {
     # Check the spreadsheet to more information
@@ -22,7 +22,7 @@ DNN_MODELS = {
         "model": torchvision.models.inception_v3,
         "type": DNNType.CLASSIFICATION,
         "transform": torchvision.transforms.Compose([
-            torchvision.transforms.Resize(299), torchvision.transforms.ToTensor(),
+            torchvision.transforms.Resize((256, 256)), torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     },
     # Resnet50 - github.com/pytorch/vision/tree/1de53bef2d04c34544655b0c1b6c55a25e4739fe/references/classification
@@ -31,7 +31,7 @@ DNN_MODELS = {
         "model": torchvision.models.resnet50,
         "type": DNNType.CLASSIFICATION,
         "transform": torchvision.transforms.Compose([
-            torchvision.transforms.Resize(256), torchvision.transforms.ToTensor(),
+            torchvision.transforms.Resize((256, 256)), torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     },
 
@@ -42,20 +42,20 @@ DNN_MODELS = {
         "type": DNNType.CLASSIFICATION,
         # Channels, height, width
         "transform": torchvision.transforms.Compose([
-            torchvision.transforms.Resize(600, interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+            torchvision.transforms.Resize((600, 600), interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     },
     # Object detection, segmentation, and keypoint
     RETINA_NET_RESNET_FPN50: {
         "model": torchvision.models.detection.retinanet_resnet50_fpn,
-        "transform": NotImplementedError(),
+        "transform": torchvision.transforms.Compose([torchvision.transforms.ToTensor()]),
         "type": DNNType.DETECTION
     },
 
     FASTER_RCNN_RESNET_FPN50: {
         "model": torchvision.models.detection.fasterrcnn_resnet50_fpn,
-        "transform": NotImplementedError(),
+        "transform": torchvision.transforms.Compose([torchvision.transforms.ToTensor()]),
         "type": DNNType.DETECTION
     },
 }
@@ -65,16 +65,18 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
                              batch_size: int, setup_iteration: int, batch_iteration: int) -> int:
     output_errors = 0
     if dnn_type == DNNType.CLASSIFICATION:
-        pass
+        print(dnn_golden_tensor)
+        print(dnn_output_tensor)
     elif dnn_type == DNNType.DETECTION:
-        pass
+        print(dnn_golden_tensor)
+        print(dnn_output_tensor)
     else:
-        pass
+        raise NotImplementedError("Only CLASSIFICATION AND DETECTION SUPPORTED FOR NOW")
     return output_errors
 
 
-def load_input_images_to_tensor(transforms: torchvision.transforms, image_list_path: str, logger: logging.Logger,
-                                batch_size: int, device: str) -> torch.tensor:
+def load_dataset(transforms: torchvision.transforms, image_list_path: str, logger: logging.Logger,
+                 batch_size: int, device: str) -> torch.tensor:
     timer = Timer()
     timer.tic()
     images = load_image_list(image_list_path)
@@ -84,7 +86,7 @@ def load_input_images_to_tensor(transforms: torchvision.transforms, image_list_p
     input_tensor = torch.stack(resized_images).to(device)
     input_tensor = torch.split(input_tensor, batch_size)
     timer.toc()
-    logger.info(f"Input images loaded and resized successfully: {timer}")
+    logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor
 
 
@@ -128,8 +130,8 @@ def main():
 
     # First step is to load the inputs in the memory
     timer.tic()
-    input_list = load_input_images_to_tensor(transforms=transform, image_list_path=image_list_path,
-                                             logger=output_logger, batch_size=batch_size, device=device)
+    input_list = load_dataset(transforms=transform, image_list_path=image_list_path,
+                              logger=output_logger, batch_size=batch_size, device=device)
     timer.toc()
     output_logger.debug(f"Time necessary to load the inputs: {timer}")
 
@@ -171,7 +173,8 @@ def main():
                                                       dnn_type=dnn_type, batch_size=batch_size,
                                                       setup_iteration=setup_iteration, batch_iteration=batch_iteration)
                 else:
-                    dnn_gold_tensors.append(current_output.to("cpu"))
+                    assert len(current_output) == batch_size, str(current_output)
+                    dnn_gold_tensors.append(current_output)
 
                 total_errors += errors
                 timer.toc()
@@ -183,8 +186,8 @@ def main():
                 del input_list
                 del dnn_model
                 dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
-                input_list = load_input_images_to_tensor(transforms=transform, image_list_path=image_list_path,
-                                                         logger=output_logger, batch_size=batch_size, device=device)
+                input_list = load_dataset(transforms=transform, image_list_path=image_list_path,
+                                          logger=output_logger, batch_size=batch_size, device=device)
 
             setup_iteration += 1
     timer.tic()
