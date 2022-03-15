@@ -101,7 +101,7 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
 
 def main():
     # Check the available device
-    device, batch_size = "cpu", 5
+    device, batch_size = "cpu", 1
     if torch.cuda.is_available():
         device = "cuda:0"
         batch_size = BATCH_SIZE_GPU

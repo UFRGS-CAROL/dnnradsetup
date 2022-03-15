@@ -1,7 +1,7 @@
 import os
 import random
 import shutil
-
+from PIL import Image
 DATA_SET_SIZE = 100
 
 
@@ -15,9 +15,14 @@ def generate_sample(root_dir, output_dir, img_list_path):
     if os.path.exists(output_dir) is True:
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
-    for i in range(DATA_SET_SIZE):
-        reduced_dataset.append(random.choice(files_list))
-        shutil.copy(reduced_dataset[-1], output_dir)
+    i = 0
+    while i < DATA_SET_SIZE:
+        chosen = random.choice(files_list)
+        im = Image.open(chosen)
+        if "RGB" in im.mode:
+            reduced_dataset.append(chosen)
+            shutil.copy(chosen, output_dir)
+            i += 1
     with open(output_dir + img_list_path, "w") as fp:
         for line in reduced_dataset:
             fp.write(line + "\n")
