@@ -18,9 +18,11 @@ ALL_DNNS = [RESNET_50, INCEPTION_V3, INCEPTION_B7,
 
 BATCH_SIZE_GPU = 5
 
+CLASSIFICATION_THRESHOLD = 1e-5
+
 
 def parse_args():
-    """ Parse the args and return a args.Namespace and the tostring from the args    """
+    """ Parse the args and return an args namespace and the tostring from the args    """
     parser = argparse.ArgumentParser(description='PyTorch DNN radiation setup')
     parser.add_argument('--model', default=ALL_DNNS[0],
                         help=f'Network name. It can be ' + ', '.join(ALL_DNNS))
@@ -76,4 +78,4 @@ def load_image_list(image_list_path: str) -> list:
     with open(image_list_path, 'r') as f:
         image_files = f.read().splitlines()
     images = list(map(Image.open, image_files))
-    return images
+    return images, image_files

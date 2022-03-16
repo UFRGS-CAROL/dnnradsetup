@@ -17,7 +17,7 @@ def end_iteration():
         log_helper.end_iteration()
 
 
-def start_log_file(bench_name, header):
+def start_log_file(bench_name: str, header: str):
     if NOT_GOLDEN_GENERATION:
         log_helper.start_log_file(benchmark_name=bench_name, test_info=header)
 
@@ -30,3 +30,23 @@ def end_log_file():
 def disable_logging():
     global NOT_GOLDEN_GENERATION
     NOT_GOLDEN_GENERATION = False
+
+
+def log_info_detail(info_detail: str):
+    if NOT_GOLDEN_GENERATION:
+        log_helper.log_info_detail(info_detail)
+
+
+def log_error_detail(error_detail: str):
+    if NOT_GOLDEN_GENERATION:
+        log_helper.log_error_detail(error_detail)
+
+
+def log_error_count(error_count: int):
+    if NOT_GOLDEN_GENERATION:
+        log_helper.log_error_count(error_count)
+
+
+def log_info_count(info_count: int):
+    if NOT_GOLDEN_GENERATION:
+        log_helper.log_info_count(info_count)

@@ -5,13 +5,14 @@ Main file for Pytorch DNNs setup
 """
 import logging
 import os
+from typing import Tuple
 
 import torch
 import torchvision
 
 import console_logger
 import dnn_log_helper as dnn_log_helper
-from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, BATCH_SIZE_GPU
+from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, BATCH_SIZE_GPU, CLASSIFICATION_THRESHOLD
 from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
 from common_tf_and_pt import parse_args, Timer, load_image_list
 
@@ -62,24 +63,49 @@ DNN_MODELS = {
 
 
 def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, dnn_type: DNNType,
-                             batch_size: int, setup_iteration: int, batch_iteration: int) -> int:
+                             batch_size: int, setup_iteration: int, batch_iteration: int, current_image_names: list,
+                             output_logger: logging.Logger) -> int:
     output_errors = 0
     if dnn_type == DNNType.CLASSIFICATION:
-        print(dnn_golden_tensor)
-        print(dnn_output_tensor)
+        # Make sure that they are on CPU
+        dnn_output_tensor = dnn_output_tensor.to("cpu")
+
+        if torch.equal(dnn_output_tensor, dnn_output_tensor) is False:
+            output_logger.error("Not equal output tensors")
+
+            if dnn_golden_tensor.shape != dnn_output_tensor.shape:
+                info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
+                output_logger.error(info_detail)
+                dnn_log_helper.log_info_detail(info_detail)
+
+            # Loop through the images
+            for batch_i in range(0, batch_size):
+                img_name_i = current_image_names[batch_i]
+                for i, gold, found in enumerate(zip(dnn_golden_tensor[batch_i], dnn_output_tensor[batch_i])):
+                    if abs(gold - found) > CLASSIFICATION_THRESHOLD:
+                        error_detail = f"img:{img_name_i} s_it: {setup_iteration} "
+                        error_detail += f"b_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
+                        output_logger.error(error_detail)
+                        dnn_log_helper.log_error_detail(error_detail)
+                        output_errors += 1
+
     elif dnn_type == DNNType.DETECTION:
         print(dnn_golden_tensor)
         print(dnn_output_tensor)
     else:
         raise NotImplementedError("Only CLASSIFICATION AND DETECTION SUPPORTED FOR NOW")
+
+    dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
 
 def load_dataset(transforms: torchvision.transforms, image_list_path: str, logger: logging.Logger,
-                 batch_size: int, device: str) -> torch.tensor:
+                 batch_size: int, device: str) -> Tuple[torch.tensor, list]:
     timer = Timer()
     timer.tic()
-    images = load_image_list(image_list_path)
+    images, image_list = load_image_list(image_list_path)
+    # Remove the base path
+    image_list = list(map(os.path.basename, image_list))
     resized_images = list()
     for image in images:
         resized_images.append(transforms(image))
@@ -87,7 +113,7 @@ def load_dataset(transforms: torchvision.transforms, image_list_path: str, logge
     input_tensor = torch.split(input_tensor, batch_size)
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
-    return input_tensor
+    return input_tensor, image_list
 
 
 def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.Module:
@@ -130,8 +156,8 @@ def main():
 
     # First step is to load the inputs in the memory
     timer.tic()
-    input_list = load_dataset(transforms=transform, image_list_path=image_list_path,
-                              logger=output_logger, batch_size=batch_size, device=device)
+    input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
+                                           logger=output_logger, batch_size=batch_size, device=device)
     timer.toc()
     output_logger.debug(f"Time necessary to load the inputs: {timer}")
 
@@ -155,7 +181,9 @@ def main():
         while setup_iteration < iterations:
             total_errors = 0
             # Loop over the input list
-            for batch_iteration, batched_input in enumerate(input_list):
+            for batch_iteration in range(0, len(input_list), batch_size):
+                batched_input = input_list[batch_iteration]
+                current_image_names = image_names[batch_iteration:batch_iteration + batch_size]
                 timer.tic()
                 dnn_log_helper.start_iteration()
                 current_output = dnn_model(batched_input)
@@ -170,8 +198,9 @@ def main():
                 if generate is False:
                     current_gold = dnn_gold_tensors[batch_iteration]
                     errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
-                                                      dnn_type=dnn_type, batch_size=batch_size,
-                                                      setup_iteration=setup_iteration, batch_iteration=batch_iteration)
+                                                      dnn_type=dnn_type, setup_iteration=setup_iteration,
+                                                      batch_iteration=batch_iteration, output_logger=output_logger,
+                                                      batch_size=batch_size, current_image_names=current_image_names)
                 else:
                     assert len(current_output) == batch_size, str(current_output)
                     dnn_gold_tensors.append(current_output)
