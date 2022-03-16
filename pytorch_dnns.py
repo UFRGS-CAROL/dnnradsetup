@@ -64,17 +64,25 @@ DNN_MODELS = {
 
 def show_classification_result(batch_input: torch.tensor, image_list: list):
     from PIL import Image, ImageFont, ImageDraw
+    # importing the module
+    import json
+
+    # reading the data from the file
+    with open('imagenet-simple-labels.json') as f:
+        data = f.read()
+    # reconstructing the data as a dictionary
+    js = json.loads(data)
     for tensor, img_str in zip(batch_input, image_list):
         im = Image.open("data/imagenet/subset/" + img_str)
         draw = ImageDraw.Draw(im)
-        print(tensor.shape)
         labels = torch.topk(tensor, k=5).indices.squeeze(0)
-        print(labels)
-        probs = [torch.softmax(tensor, dim=1)[0, idx].item() for idx in labels]
-        lab_text = "\n".join([f"{l}:{p}" for l, p in zip(labels, probs)])
+        probs = [torch.softmax(tensor, dim=-1)[idx].item() for idx in labels]
+        lab_text = "\n".join([f"{js[l]}:{p}" for l, p in zip(labels, probs)])
         # draw.text((x, y),"Sample Text",(r,g,b))
-        draw.text((0, 0), lab_text, (255, 255, 255), font=ImageFont.truetype("sans-serif.ttf", 16))
+        draw.text((0, 0), lab_text, (0, 0, 0),
+                  font=ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 16, ))
         im.show()
+
 
 
 def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
@@ -219,7 +227,7 @@ def main():
                 dnn_log_helper.start_iteration()
                 current_output = dnn_model(batched_input)
                 dnn_log_helper.end_iteration()
-                show_classification_result(batch_input=current_output, image_list=current_image_names)
+                # show_classification_result(batch_input=current_output, image_list=current_image_names)
 
                 timer.toc()
                 kernel_time = timer.diff_time

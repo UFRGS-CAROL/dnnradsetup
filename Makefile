@@ -9,9 +9,9 @@ GOLDPATH = ./gold_$(MODEL)_$(PRECISION)_$(DATASET).pt
 all: generate_pytorch test_pytorch
 
 generate_pytorch:
-	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) \
+	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION)\
 					  --imglist $(IMGLIST) --goldpath $(GOLDPATH) --generate
 
 test_pytorch:
-	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) \
+	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) --iterations $(ITERATIONS) \
 					  --imglist $(IMGLIST) --goldpath $(GOLDPATH)
