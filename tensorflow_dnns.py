@@ -9,7 +9,7 @@ from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, SSD_MOBILENET_V2,
 from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
 from common_tf_and_pt import parse_args, Timer, load_image_list
 from tensorflow.keras.applications import ResNet50, InceptionV3, efficientnet
-from tensorflow.keras.applications import resnet50.preprocess_input, inception_v3.preprocess_input
+import  tensorflow.keras.applications 
 from tensorflow.keras.applications.efficientnet import EfficientNetB7
 import numpy as np
 
