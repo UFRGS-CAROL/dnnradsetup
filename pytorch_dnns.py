@@ -62,39 +62,70 @@ DNN_MODELS = {
 }
 
 
+def show_classification_result(batch_input: torch.tensor, image_list: list):
+    from PIL import Image, ImageFont, ImageDraw
+    for tensor, img_str in zip(batch_input, image_list):
+        im = Image.open("data/imagenet/subset/" + img_str)
+        draw = ImageDraw.Draw(im)
+        print(tensor.shape)
+        labels = torch.topk(tensor, k=5).indices.squeeze(0)
+        print(labels)
+        probs = [torch.softmax(tensor, dim=1)[0, idx].item() for idx in labels]
+        lab_text = "\n".join([f"{l}:{p}" for l, p in zip(labels, probs)])
+        # draw.text((x, y),"Sample Text",(r,g,b))
+        draw.text((0, 0), lab_text, (255, 255, 255), font=ImageFont.truetype("sans-serif.ttf", 16))
+        im.show()
+
+
+def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
+                           setup_iteration: int, batch_iteration: int, current_image_names: list,
+                           output_logger: logging.Logger) -> int:
+    # Make sure that they are on CPU
+    dnn_output_tensor = dnn_output_tensor.to("cpu")
+    # # Debug injection
+    # if setup_iteration + batch_iteration == 20:
+    #     for i in range(300, 900):
+    #         dnn_output_tensor[3][i] = 34.2
+    output_errors = 0
+    if torch.equal(dnn_golden_tensor, dnn_output_tensor) is False:
+        output_logger.error("Not equal output tensors")
+        if dnn_golden_tensor.shape != dnn_output_tensor.shape:
+            info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
+            output_logger.error(info_detail)
+            dnn_log_helper.log_info_detail(info_detail)
+        # Loop through the images
+        for batch_i in range(0, batch_size):
+            img_name_i = current_image_names[batch_i]
+            for i, (gold, found) in enumerate(zip(dnn_golden_tensor[batch_i], dnn_output_tensor[batch_i])):
+                if abs(gold - found) > CLASSIFICATION_THRESHOLD:
+                    error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
+                    error_detail += f"b_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
+                    output_logger.error(error_detail)
+                    dnn_log_helper.log_error_detail(error_detail)
+                    output_errors += 1
+    return output_errors
+
+
+def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
+                      setup_iteration: int, batch_iteration: int, current_image_names: list,
+                      output_logger: logging.Logger) -> int:
+    return 0
+
+
 def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, dnn_type: DNNType,
                              batch_size: int, setup_iteration: int, batch_iteration: int, current_image_names: list,
                              output_logger: logging.Logger) -> int:
     output_errors = 0
     if dnn_type == DNNType.CLASSIFICATION:
-        # Make sure that they are on CPU
-        dnn_output_tensor = dnn_output_tensor.to("cpu")
-
-        if torch.equal(dnn_output_tensor, dnn_output_tensor) is False:
-            output_logger.error("Not equal output tensors")
-
-            if dnn_golden_tensor.shape != dnn_output_tensor.shape:
-                info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
-                output_logger.error(info_detail)
-                dnn_log_helper.log_info_detail(info_detail)
-
-            # Loop through the images
-            for batch_i in range(0, batch_size):
-                img_name_i = current_image_names[batch_i]
-                for i, gold, found in enumerate(zip(dnn_golden_tensor[batch_i], dnn_output_tensor[batch_i])):
-                    if abs(gold - found) > CLASSIFICATION_THRESHOLD:
-                        error_detail = f"img:{img_name_i} s_it: {setup_iteration} "
-                        error_detail += f"b_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
-                        output_logger.error(error_detail)
-                        dnn_log_helper.log_error_detail(error_detail)
-                        output_errors += 1
-
+        output_errors = compare_classification(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
+                                               batch_size=batch_size, setup_iteration=setup_iteration,
+                                               batch_iteration=batch_iteration, current_image_names=current_image_names,
+                                               output_logger=output_logger)
     elif dnn_type == DNNType.DETECTION:
-        print(dnn_golden_tensor)
-        print(dnn_output_tensor)
-    else:
-        raise NotImplementedError("Only CLASSIFICATION AND DETECTION SUPPORTED FOR NOW")
-
+        output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
+                                          batch_size=batch_size, setup_iteration=setup_iteration,
+                                          batch_iteration=batch_iteration, current_image_names=current_image_names,
+                                          output_logger=output_logger)
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
@@ -127,7 +158,7 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
 
 def main():
     # Check the available device
-    device, batch_size = "cpu", 1
+    device, batch_size = "cpu", 5
     if torch.cuda.is_available():
         device = "cuda:0"
         batch_size = BATCH_SIZE_GPU
@@ -181,22 +212,22 @@ def main():
         while setup_iteration < iterations:
             total_errors = 0
             # Loop over the input list
-            for batch_iteration in range(0, len(input_list), batch_size):
-                batched_input = input_list[batch_iteration]
+            for batch_i, batched_input in enumerate(input_list):
+                batch_iteration = batch_i * batch_size
                 current_image_names = image_names[batch_iteration:batch_iteration + batch_size]
                 timer.tic()
                 dnn_log_helper.start_iteration()
                 current_output = dnn_model(batched_input)
                 dnn_log_helper.end_iteration()
-                timer.toc()
-                iteration_out = f"It:{setup_iteration} - input it:{batch_iteration}"
-                iteration_out += f" inference time:{timer}"
+                show_classification_result(batch_input=current_output, image_list=current_image_names)
 
+                timer.toc()
+                kernel_time = timer.diff_time
                 # Then compare the golden with the output
                 timer.tic()
                 errors = 0
                 if generate is False:
-                    current_gold = dnn_gold_tensors[batch_iteration]
+                    current_gold = dnn_gold_tensors[batch_i]
                     errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
                                                       dnn_type=dnn_type, setup_iteration=setup_iteration,
                                                       batch_iteration=batch_iteration, output_logger=output_logger,
@@ -207,7 +238,12 @@ def main():
 
                 total_errors += errors
                 timer.toc()
-                iteration_out += f", gold compare time:{timer} errors:{errors}"
+                comparison_time = timer.diff_time
+
+                iteration_out = f"It:{setup_iteration} - input it:{batch_i}"
+                iteration_out += f" inference time:{kernel_time:.5f}"
+                time_pct = (comparison_time / (comparison_time + kernel_time)) * 100.0
+                iteration_out += f", gold compare time:{comparison_time:.5f} ({time_pct:.1f}%) errors:{errors}"
                 output_logger.debug(iteration_out)
 
             # Reload after error
@@ -215,8 +251,8 @@ def main():
                 del input_list
                 del dnn_model
                 dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
-                input_list = load_dataset(transforms=transform, image_list_path=image_list_path,
-                                          logger=output_logger, batch_size=batch_size, device=device)
+                input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
+                                                       logger=output_logger, batch_size=batch_size, device=device)
 
             setup_iteration += 1
     timer.tic()
