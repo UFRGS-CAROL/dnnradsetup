@@ -16,5 +16,5 @@ test_pytorch:
 	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) \
 					  --imglist $(IMGLIST) --goldpath $(GOLDPATH)
 generate_tensorflow:
-        ./tensorflow_dnns.py --model $(MODEL) --precision $(PRECISION) \
+	./tensorflow_dnns.py --model $(MODEL) --precision $(PRECISION) \
                                           --imglist $(IMGLIST) --goldpath $(GOLDPATH) --generate
