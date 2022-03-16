@@ -18,7 +18,7 @@ ALL_DNNS = [RESNET_50, INCEPTION_V3, INCEPTION_B7,
 
 BATCH_SIZE_GPU = 5
 
-CLASSIFICATION_THRESHOLD = 1e-5
+CLASSIFICATION_THRESHOLD = 1e-6
 
 
 def parse_args():
@@ -53,6 +53,10 @@ class Timer:
 
     def toc(self):
         self.time_measure = time.time() - self.time_measure
+
+    @property
+    def diff_time(self):
+        return self.time_measure
 
     def __str__(self):
         return f"{self.time_measure:.4f}s"
