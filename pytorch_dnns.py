@@ -95,7 +95,7 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
     #     for i in range(300, 900):
     #         dnn_output_tensor[3][i] = 34.2
     output_errors = 0
-    # TODO: use the same approach as the detection, compare only the positions that differ
+    # using the same approach as the detection, compare only the positions that differ
     if torch.equal(dnn_golden_tensor, dnn_output_tensor) is False:
         output_logger.error("Not equal output tensors")
         if dnn_golden_tensor.shape != dnn_output_tensor.shape:
@@ -120,7 +120,7 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
             for i, (gold, found) in enumerate(zip(current_gold_tensor[diff_tensor_index],
                                                   current_output_tensor[diff_tensor_index])):
                 error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
-                error_detail += f"bti:{batch_iteration} pos:{i} g:{gold} f:{found}"
+                error_detail += f"bti:{batch_iteration} pos:{i} g:{gold:.6e} f:{found:.6e}"
                 output_logger.error(error_detail)
                 dnn_log_helper.log_error_detail(error_detail)
     return output_errors
