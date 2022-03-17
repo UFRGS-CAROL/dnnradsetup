@@ -1,6 +1,7 @@
 import argparse
 import enum
 import time
+from typing import Tuple
 
 from PIL import Image
 
@@ -19,18 +20,20 @@ ALL_DNNS = [RESNET_50, INCEPTION_V3, INCEPTION_B7,
 BATCH_SIZE_GPU = 5
 
 CLASSIFICATION_THRESHOLD = 1e-6
+DETECTION_BOXES_THRESHOLD = 1e-6
 
 
 def parse_args():
     """ Parse the args and return an args namespace and the tostring from the args    """
     parser = argparse.ArgumentParser(description='PyTorch DNN radiation setup')
-    parser.add_argument('--model', default=ALL_DNNS[0],
-                        help=f'Network name. It can be ' + ', '.join(ALL_DNNS))
+    parser.add_argument('--model', default=ALL_DNNS[0], help=f'Network name. It can be ' + ', '.join(ALL_DNNS))
     parser.add_argument('--imglist', help='Path to the list of images as input')
     parser.add_argument('--precision', default="fp32", help="Precision of the network, can be fp16 and fp32")
     parser.add_argument('--iterations', default=int(1e12), help="Iterations to run forever", type=int)
-    parser.add_argument('--generate', default=False, action="store_true",
-                        help="Set this flag to generate the gold")
+    parser.add_argument('--generate', default=False, action="store_true", help="Set this flag to generate the gold")
+    parser.add_argument('--disableconsolelog', default=False, action="store_true",
+                        help="Set this flag disable console logging")
+
     parser.add_argument('--goldpath', help="Path to the gold file")
     args = parser.parse_args()
     # Check if the model is correct
@@ -78,7 +81,7 @@ class DNNType(enum.Enum):
         return str(self)
 
 
-def load_image_list(image_list_path: str) -> list:
+def load_image_list(image_list_path: str) -> Tuple[list, list]:
     with open(image_list_path, 'r') as f:
         image_files = f.read().splitlines()
     images = list(map(Image.open, image_files))

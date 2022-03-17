@@ -5,7 +5,7 @@ Main file for Pytorch DNNs setup
 """
 import logging
 import os
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 import torchvision
@@ -68,7 +68,7 @@ def show_classification_result(batch_input: torch.tensor, image_list: list):
     import json
 
     # reading the data from the file
-    with open('imagenet-simple-labels.json') as f:
+    with open('data/imagenet-simple-labels.json') as f:
         data = f.read()
     # reconstructing the data as a dictionary
     js = json.loads(data)
@@ -82,7 +82,6 @@ def show_classification_result(batch_input: torch.tensor, image_list: list):
         draw.text((0, 0), lab_text, (0, 0, 0),
                   font=ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 16, ))
         im.show()
-
 
 
 def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
@@ -107,7 +106,7 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
             for i, (gold, found) in enumerate(zip(dnn_golden_tensor[batch_i], dnn_output_tensor[batch_i])):
                 if abs(gold - found) > CLASSIFICATION_THRESHOLD:
                     error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
-                    error_detail += f"b_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
+                    error_detail += f"batch_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
                     output_logger.error(error_detail)
                     dnn_log_helper.log_error_detail(error_detail)
                     output_errors += 1
@@ -117,6 +116,38 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
 def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
                       setup_iteration: int, batch_iteration: int, current_image_names: list,
                       output_logger: logging.Logger) -> int:
+    for batch_i, (gold_batch_i, out_batch_i) in enumerate(zip(dnn_golden_tensor, dnn_output_tensor)):
+        boxes_gold, labels_gold, scores_gold = gold_batch_i["boxes"], gold_batch_i["labels"], gold_batch_i["scores"]
+        img_name_i = current_image_names[batch_i]
+        # Make sure that we are on the CPU
+        boxes_out = out_batch_i["boxes"].to("cpu")
+        labels_out = out_batch_i["labels"].to("cpu")
+        scores_out = out_batch_i["scores"].to("cpu")
+
+        scores_out[34] = 333
+        diff_scores_index = torch.not_equal(scores_gold, scores_out)
+        if all([torch.equal(boxes_gold, boxes_out),
+                torch.equal(labels_gold, labels_out),
+                ~torch.any(diff_scores_index)]) is False:
+            boxes_error_count, labels_error_count, scores_error_count = 0, 0, 0
+            print(torch.any(diff_scores_index))
+
+            # # Compare the boxes ----------------------------------------------------------------------------------------
+            # for box_i, (b_gold, b_out) in enumerate(zip(boxes_gold, boxes_out)):
+            #     if abs(b_gold - b_out) > DETECTION_BOXES_THRESHOLD:
+            #         error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
+            #         error_detail += f"batch_it:{batch_iteration} box:{box_i} g:{b_gold} f:{b_out}"
+            #         output_logger.error(error_detail)
+            #         dnn_log_helper.log_error_detail(error_detail)
+            #         boxes_error_count += 1
+            # # Compare the scores ---------------------------------------------------------------------------------------
+            #
+            pass
+
+    exit()
+    # for batch_i in range(zip(batch_size):
+    #
+    #     probabilities = dnn_output_tensor
     return 0
 
 
@@ -139,17 +170,24 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
 
 
 def load_dataset(transforms: torchvision.transforms, image_list_path: str, logger: logging.Logger,
-                 batch_size: int, device: str) -> Tuple[torch.tensor, list]:
+                 batch_size: int, device: str, dnn_type: DNNType) -> Tuple[Union[torch.tensor, list], list]:
     timer = Timer()
     timer.tic()
     images, image_list = load_image_list(image_list_path)
     # Remove the base path
     image_list = list(map(os.path.basename, image_list))
-    resized_images = list()
-    for image in images:
-        resized_images.append(transforms(image))
-    input_tensor = torch.stack(resized_images).to(device)
-    input_tensor = torch.split(input_tensor, batch_size)
+    # THIS IS Necessary as Classification models expect a tensor, and detection expect a list of tensors
+    input_tensor = list()
+    if dnn_type == DNNType.CLASSIFICATION:
+        resized_images = list()
+        for image in images:
+            resized_images.append(transforms(image))
+        input_tensor = torch.stack(resized_images).to(device)
+        input_tensor = torch.split(input_tensor, batch_size)
+    elif dnn_type == DNNType.DETECTION:
+        for im_i in range(0, len(images), batch_size):
+            chunk = [transforms(im_to).to(device) for im_to in images[im_i: im_i + batch_size]]
+            input_tensor.append(chunk)
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor, image_list
@@ -166,7 +204,7 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
 
 def main():
     # Check the available device
-    device, batch_size = "cpu", 5
+    device, batch_size = "cpu", 1
     if torch.cuda.is_available():
         device = "cuda:0"
         batch_size = BATCH_SIZE_GPU
@@ -183,6 +221,9 @@ def main():
     gold_path = args.goldpath
     precision = args.precision
     model_name = args.model
+    disable_console_logger = args.disableconsolelog
+    if disable_console_logger:
+        output_logger.level = logging.ERROR
 
     # Set the parameters for the DNN
     model_parameters = DNN_MODELS[model_name]
@@ -195,8 +236,8 @@ def main():
 
     # First step is to load the inputs in the memory
     timer.tic()
-    input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
-                                           logger=output_logger, batch_size=batch_size, device=device)
+    input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path, logger=output_logger,
+                                           batch_size=batch_size, device=device, dnn_type=dnn_type)
     timer.toc()
     output_logger.debug(f"Time necessary to load the inputs: {timer}")
 
@@ -248,8 +289,8 @@ def main():
                 timer.toc()
                 comparison_time = timer.diff_time
 
-                iteration_out = f"It:{setup_iteration} - input it:{batch_i}"
-                iteration_out += f" inference time:{kernel_time:.5f}"
+                iteration_out = f"It:{setup_iteration:<3} imgit:{batch_i:<3}"
+                iteration_out += f" {batch_size:<2} batches inference time:{kernel_time:.5f}"
                 time_pct = (comparison_time / (comparison_time + kernel_time)) * 100.0
                 iteration_out += f", gold compare time:{comparison_time:.5f} ({time_pct:.1f}%) errors:{errors}"
                 output_logger.debug(iteration_out)
@@ -260,7 +301,8 @@ def main():
                 del dnn_model
                 dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
                 input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
-                                                       logger=output_logger, batch_size=batch_size, device=device)
+                                                       logger=output_logger, batch_size=batch_size, device=device,
+                                                       dnn_type=dnn_type)
 
             setup_iteration += 1
     timer.tic()
