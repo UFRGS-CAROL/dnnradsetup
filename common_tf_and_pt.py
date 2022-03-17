@@ -21,6 +21,9 @@ BATCH_SIZE_GPU = 5
 
 CLASSIFICATION_THRESHOLD = 1e-6
 DETECTION_BOXES_THRESHOLD = 1e-6
+DETECTION_SCORES_THRESHOLD = 1e-6
+
+MAXIMUM_ERRORS_PER_ITERATION = 5000
 
 
 def parse_args():
@@ -30,6 +33,8 @@ def parse_args():
     parser.add_argument('--imglist', help='Path to the list of images as input')
     parser.add_argument('--precision', default="fp32", help="Precision of the network, can be fp16 and fp32")
     parser.add_argument('--iterations', default=int(1e12), help="Iterations to run forever", type=int)
+    parser.add_argument('--batchsize', default=1, help="Batches to process in parallel", type=int)
+
     parser.add_argument('--generate', default=False, action="store_true", help="Set this flag to generate the gold")
     parser.add_argument('--disableconsolelog', default=False, action="store_true",
                         help="Set this flag disable console logging")

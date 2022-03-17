@@ -50,3 +50,13 @@ def log_error_count(error_count: int):
 def log_info_count(info_count: int):
     if NOT_GOLDEN_GENERATION:
         log_helper.log_info_count(info_count)
+
+
+def set_max_errors_iter(max_errors):
+    if NOT_GOLDEN_GENERATION:
+        return log_helper.set_max_errors_iter(max_errors)
+
+
+def set_max_infos_iter(max_infos):
+    if NOT_GOLDEN_GENERATION:
+        return log_helper.set_max_infos_iter(max_infos)

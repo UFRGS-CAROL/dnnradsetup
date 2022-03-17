@@ -12,7 +12,8 @@ import torchvision
 
 import console_logger
 import dnn_log_helper as dnn_log_helper
-from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, BATCH_SIZE_GPU, CLASSIFICATION_THRESHOLD
+from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, CLASSIFICATION_THRESHOLD, \
+    DETECTION_BOXES_THRESHOLD, DETECTION_SCORES_THRESHOLD, MAXIMUM_ERRORS_PER_ITERATION
 from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
 from common_tf_and_pt import parse_args, Timer, load_image_list
 
@@ -94,61 +95,94 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
     #     for i in range(300, 900):
     #         dnn_output_tensor[3][i] = 34.2
     output_errors = 0
+    # TODO: use the same approach as the detection, compare only the positions that differ
     if torch.equal(dnn_golden_tensor, dnn_output_tensor) is False:
         output_logger.error("Not equal output tensors")
         if dnn_golden_tensor.shape != dnn_output_tensor.shape:
             info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
             output_logger.error(info_detail)
             dnn_log_helper.log_info_detail(info_detail)
+
         # Loop through the images
-        for batch_i in range(0, batch_size):
-            img_name_i = current_image_names[batch_i]
-            for i, (gold, found) in enumerate(zip(dnn_golden_tensor[batch_i], dnn_output_tensor[batch_i])):
-                if abs(gold - found) > CLASSIFICATION_THRESHOLD:
-                    error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
-                    error_detail += f"batch_it:{batch_iteration} pos:{i} g:{gold} f:{found}"
-                    output_logger.error(error_detail)
-                    dnn_log_helper.log_error_detail(error_detail)
-                    output_errors += 1
+        # for batch_i in range(0, batch_size):
+        #     img_name_i = current_image_names[batch_i]
+        for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names,
+                                                                          dnn_golden_tensor,
+                                                                          dnn_output_tensor):
+            diff_tensor_index = (
+                    torch.abs(torch.sub(current_gold_tensor, current_output_tensor)) > CLASSIFICATION_THRESHOLD
+            )
+
+            output_errors += diff_tensor_index.sum()
+            diff_detail = f"diff img:{img_name_i} scores:{diff_tensor_index.sum()}"
+            output_logger.error(diff_detail)
+            dnn_log_helper.log_error_detail(diff_detail)
+            for i, (gold, found) in enumerate(zip(current_gold_tensor[diff_tensor_index],
+                                                  current_output_tensor[diff_tensor_index])):
+                error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
+                error_detail += f"bti:{batch_iteration} pos:{i} g:{gold} f:{found}"
+                output_logger.error(error_detail)
+                dnn_log_helper.log_error_detail(error_detail)
     return output_errors
 
 
-def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
-                      setup_iteration: int, batch_iteration: int, current_image_names: list,
-                      output_logger: logging.Logger) -> int:
-    for batch_i, (gold_batch_i, out_batch_i) in enumerate(zip(dnn_golden_tensor, dnn_output_tensor)):
+def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_iteration: int,
+                      current_image_names: list, output_logger: logging.Logger) -> int:
+    total_errors = 0
+    for img_name_i, gold_batch_i, out_batch_i in zip(current_image_names,
+                                                     dnn_golden_tensor,
+                                                     dnn_output_tensor):
         boxes_gold, labels_gold, scores_gold = gold_batch_i["boxes"], gold_batch_i["labels"], gold_batch_i["scores"]
-        img_name_i = current_image_names[batch_i]
         # Make sure that we are on the CPU
         boxes_out = out_batch_i["boxes"].to("cpu")
         labels_out = out_batch_i["labels"].to("cpu")
         scores_out = out_batch_i["scores"].to("cpu")
+        # for i in range(10):
+        #     scores_out[34 + i] = i
+        #     boxes_out[i][i % 4] = i
+        #     labels_out[40 + i] = i
+        #  It is better compare to a threshold
+        diff_scores_index = (
+                torch.abs(torch.sub(scores_gold, scores_out)) > DETECTION_SCORES_THRESHOLD
+        )
 
-        scores_out[34] = 333
-        diff_scores_index = torch.not_equal(scores_gold, scores_out)
-        if all([torch.equal(boxes_gold, boxes_out),
-                torch.equal(labels_gold, labels_out),
-                ~torch.any(diff_scores_index)]) is False:
-            boxes_error_count, labels_error_count, scores_error_count = 0, 0, 0
-            print(torch.any(diff_scores_index))
+        diff_boxes_index = (
+                torch.abs(torch.sub(boxes_gold, boxes_out)) > DETECTION_BOXES_THRESHOLD
+        )
+        # Labels are integers
+        diff_labels_index = torch.not_equal(labels_gold, labels_out)
 
-            # # Compare the boxes ----------------------------------------------------------------------------------------
-            # for box_i, (b_gold, b_out) in enumerate(zip(boxes_gold, boxes_out)):
-            #     if abs(b_gold - b_out) > DETECTION_BOXES_THRESHOLD:
-            #         error_detail = f"img:{img_name_i} s_it:{setup_iteration} "
-            #         error_detail += f"batch_it:{batch_iteration} box:{box_i} g:{b_gold} f:{b_out}"
-            #         output_logger.error(error_detail)
-            #         dnn_log_helper.log_error_detail(error_detail)
-            #         boxes_error_count += 1
-            # # Compare the scores ---------------------------------------------------------------------------------------
-            #
-            pass
+        if any([torch.any(diff_boxes_index), torch.any(diff_labels_index), torch.any(diff_scores_index)]):
+            diff_scores = scores_out[diff_scores_index]
+            # For boxes, we have to work with the indexes
+            diff_boxes = boxes_out[diff_boxes_index.any(dim=1)]
+            diff_labels = labels_out[diff_labels_index]
+            total_errors += diff_scores.numel() + diff_labels.numel() + diff_boxes.numel()
+            error_detail = f"diff img:{img_name_i} scores:{diff_scores.numel()} bti:{batch_iteration} "
+            error_detail += f"labels:{diff_labels.numel()} boxes:{diff_boxes.numel()}"
+            output_logger.error(error_detail)
+            dnn_log_helper.log_error_detail(error_detail)
 
-    exit()
-    # for batch_i in range(zip(batch_size):
-    #
-    #     probabilities = dnn_output_tensor
-    return 0
+            # Logging the score indexes that in fact have errors
+            for s_i, (score_gold, score_out) in enumerate(zip(scores_gold[diff_scores_index], diff_scores)):
+                score_error = f"si:{s_i} g:{score_gold} o:{score_out}"
+                output_logger.error(score_error)
+                dnn_log_helper.log_error_detail(score_error)
+            # TODO: cuidar do timestamp
+            # Logging the boxes indexes that in fact have errors
+            for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold[diff_boxes_index.any(dim=1)], diff_boxes)):
+                gx1, gx2, gx3, gx4 = box_gold
+                ox1, ox2, ox3, ox4 = box_out
+                box_error = f"img:{img_name_i} bi:{b_i} gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
+                box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
+                output_logger.error(box_error)
+                dnn_log_helper.log_error_detail(box_error)
+            # Logging the boxes indexes that in fact have errors
+            for l_i, (label_gold, label_out) in enumerate(zip(labels_gold[diff_labels_index], diff_labels)):
+                label_error = f"img:{img_name_i} li:{l_i} g:{label_gold} o:{label_out}"
+                output_logger.error(label_error)
+                dnn_log_helper.log_error_detail(label_error)
+    return total_errors
 
 
 def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, dnn_type: DNNType,
@@ -162,7 +196,6 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
                                                output_logger=output_logger)
     elif dnn_type == DNNType.DETECTION:
         output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
-                                          batch_size=batch_size, setup_iteration=setup_iteration,
                                           batch_iteration=batch_iteration, current_image_names=current_image_names,
                                           output_logger=output_logger)
     dnn_log_helper.log_error_count(output_errors)
@@ -204,10 +237,7 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
 
 def main():
     # Check the available device
-    device, batch_size = "cpu", 1
-    if torch.cuda.is_available():
-        device = "cuda:0"
-        batch_size = BATCH_SIZE_GPU
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")
@@ -222,6 +252,8 @@ def main():
     precision = args.precision
     model_name = args.model
     disable_console_logger = args.disableconsolelog
+    batch_size = args.batchsize
+
     if disable_console_logger:
         output_logger.level = logging.ERROR
 
@@ -254,6 +286,7 @@ def main():
     if generate:
         dnn_log_helper.disable_logging()
     dnn_log_helper.start_log_file(bench_name=model_name, header=args_conf)
+    dnn_log_helper.set_max_errors_iter(max_errors=MAXIMUM_ERRORS_PER_ITERATION)
 
     # Main setup loop
     setup_iteration = 0
