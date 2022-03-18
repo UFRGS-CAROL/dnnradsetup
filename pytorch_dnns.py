@@ -5,17 +5,14 @@ Main file for Pytorch DNNs setup
 """
 import logging
 import os
-from typing import Tuple, Union
+from typing import Union
 
 import torch
 import torchvision
 
 import console_logger
 import dnn_log_helper as dnn_log_helper
-from common_tf_and_pt import DNNType, INCEPTION_V3, RESNET_50, CLASSIFICATION_THRESHOLD, \
-    DETECTION_BOXES_THRESHOLD, DETECTION_SCORES_THRESHOLD, MAXIMUM_ERRORS_PER_ITERATION
-from common_tf_and_pt import INCEPTION_B7, RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50
-from common_tf_and_pt import parse_args, Timer, load_image_list
+from common_tf_and_pt import *
 
 DNN_MODELS = {
     # Check the spreadsheet to more information
@@ -39,7 +36,7 @@ DNN_MODELS = {
 
     # https://github.com/lukemelas/EfficientNet-PyTorch/blob/
     # 1039e009545d9329ea026c9f7541341439712b96/efficientnet_pytorch/utils.py#L562-L564
-    INCEPTION_B7: {
+    EFFICIENT_NET_B7: {
         "model": torchvision.models.efficientnet_b7,
         "type": DNNType.CLASSIFICATION,
         # Channels, height, width
@@ -89,17 +86,17 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
                            setup_iteration: int, batch_iteration: int, current_image_names: list,
                            output_logger: logging.Logger) -> int:
     # Make sure that they are on CPU
-    dnn_output_tensor = dnn_output_tensor.to("cpu")
+    dnn_output_tensor_cpu = dnn_output_tensor.to("cpu")
     # # Debug injection
     # if setup_iteration + batch_iteration == 20:
     #     for i in range(300, 900):
     #         dnn_output_tensor[3][i] = 34.2
     output_errors = 0
     # using the same approach as the detection, compare only the positions that differ
-    if torch.equal(dnn_golden_tensor, dnn_output_tensor) is False:
+    if torch.equal(dnn_golden_tensor, dnn_output_tensor_cpu) is False:
         output_logger.error("Not equal output tensors")
-        if dnn_golden_tensor.shape != dnn_output_tensor.shape:
-            info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
+        if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
+            info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor_cpu.shape}"
             output_logger.error(info_detail)
             dnn_log_helper.log_info_detail(info_detail)
 
@@ -108,11 +105,8 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
         #     img_name_i = current_image_names[batch_i]
         for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names,
                                                                           dnn_golden_tensor,
-                                                                          dnn_output_tensor):
-            diff_tensor_index = (
-                    torch.abs(torch.sub(current_gold_tensor, current_output_tensor)) > CLASSIFICATION_THRESHOLD
-            )
-
+                                                                          dnn_output_tensor_cpu):
+            diff_tensor_index = torch.isclose(current_gold_tensor, current_output_tensor, atol=CLASSIFICATION_THRESHOLD)
             output_errors += diff_tensor_index.sum()
             diff_detail = f"diff img:{img_name_i} scores:{diff_tensor_index.sum()}"
             output_logger.error(diff_detail)
@@ -142,13 +136,9 @@ def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.
         #     boxes_out[i][i % 4] = i
         #     labels_out[40 + i] = i
         #  It is better compare to a threshold
-        diff_scores_index = (
-                torch.abs(torch.sub(scores_gold, scores_out)) > DETECTION_SCORES_THRESHOLD
-        )
+        diff_scores_index = torch.isclose(scores_gold, scores_out, atol=DETECTION_SCORES_THRESHOLD)
 
-        diff_boxes_index = (
-                torch.abs(torch.sub(boxes_gold, boxes_out)) > DETECTION_BOXES_THRESHOLD
-        )
+        diff_boxes_index = torch.isclose(boxes_gold, boxes_out, atol=DETECTION_BOXES_THRESHOLD)
         # Labels are integers
         diff_labels_index = torch.not_equal(labels_gold, labels_out)
 
@@ -285,7 +275,8 @@ def main():
     # Start the setup if it is not generate
     if generate:
         dnn_log_helper.disable_logging()
-    dnn_log_helper.start_log_file(bench_name=model_name, header=args_conf)
+    dnn_log_header = f"framework:Pytorch {args_conf}"
+    dnn_log_helper.start_log_file(bench_name=model_name, header=dnn_log_header)
     dnn_log_helper.set_max_errors_iter(max_errors=MAXIMUM_ERRORS_PER_ITERATION)
 
     # Main setup loop
