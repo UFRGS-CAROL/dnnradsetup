@@ -82,6 +82,18 @@ def show_classification_result(batch_input: torch.tensor, image_list: list):
         im.show()
 
 
+def is_not_close(rhs: torch.Tensor, lhs: torch.Tensor, threshold: float) -> torch.Tensor:
+    """ Function to be equivalent to TensorFlow ApproximateEqual """
+    return torch.greater(torch.abs(torch.subtract(rhs, lhs)), threshold)
+
+
+def equal(rhs: torch.Tensor, lhs: torch.Tensor, threshold: float = None) -> bool:
+    if threshold:
+        return bool(torch.all(torch.le(torch.abs(torch.subtract(rhs, lhs)), threshold)))
+    else:
+        return torch.equal(rhs, lhs)
+
+
 def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.tensor, batch_size: int,
                            setup_iteration: int, batch_iteration: int, current_image_names: list,
                            output_logger: logging.Logger) -> int:
@@ -93,7 +105,7 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
     #         dnn_output_tensor[3][i] = 34.2
     output_errors = 0
     # using the same approach as the detection, compare only the positions that differ
-    if torch.equal(dnn_golden_tensor, dnn_output_tensor_cpu) is False:
+    if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
         output_logger.error("Not equal output tensors")
         if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
             info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor_cpu.shape}"
@@ -106,7 +118,8 @@ def compare_classification(dnn_output_tensor: torch.tensor, dnn_golden_tensor: t
         for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names,
                                                                           dnn_golden_tensor,
                                                                           dnn_output_tensor_cpu):
-            diff_tensor_index = torch.isclose(current_gold_tensor, current_output_tensor, atol=CLASSIFICATION_THRESHOLD)
+            diff_tensor_index = is_not_close(rhs=current_gold_tensor, lhs=current_output_tensor,
+                                             threshold=CLASSIFICATION_ABS_THRESHOLD)
             output_errors += diff_tensor_index.sum()
             diff_detail = f"diff img:{img_name_i} scores:{diff_tensor_index.sum()}"
             output_logger.error(diff_detail)
@@ -136,13 +149,12 @@ def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.
         #     boxes_out[i][i % 4] = i
         #     labels_out[40 + i] = i
         #  It is better compare to a threshold
-        diff_scores_index = torch.isclose(scores_gold, scores_out, atol=DETECTION_SCORES_THRESHOLD)
-
-        diff_boxes_index = torch.isclose(boxes_gold, boxes_out, atol=DETECTION_BOXES_THRESHOLD)
+        diff_scores_index = is_not_close(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD)
+        diff_boxes_index = is_not_close(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD)
         # Labels are integers
         diff_labels_index = torch.not_equal(labels_gold, labels_out)
 
-        if any([torch.any(diff_boxes_index), torch.any(diff_labels_index), torch.any(diff_scores_index)]):
+        if any([torch.all(diff_boxes_index), torch.all(diff_labels_index), torch.all(diff_scores_index)]):
             diff_scores = scores_out[diff_scores_index]
             # For boxes, we have to work with the indexes
             diff_boxes = boxes_out[diff_boxes_index.any(dim=1)]
@@ -158,7 +170,6 @@ def compare_detection(dnn_output_tensor: torch.tensor, dnn_golden_tensor: torch.
                 score_error = f"si:{s_i} g:{score_gold} o:{score_out}"
                 output_logger.error(score_error)
                 dnn_log_helper.log_error_detail(score_error)
-            # TODO: cuidar do timestamp
             # Logging the boxes indexes that in fact have errors
             for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold[diff_boxes_index.any(dim=1)], diff_boxes)):
                 gx1, gx2, gx3, gx4 = box_gold
@@ -265,20 +276,15 @@ def main():
 
     dnn_gold_tensors = list()
     # Load if it is not a gold generating op
-    timer.tic()
     if generate is False:
+        timer.tic()
         dnn_gold_tensors = torch.load(gold_path)
+        timer.toc()
+        output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
 
-    timer.toc()
-    output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
-
-    # Start the setup if it is not generate
-    if generate:
-        dnn_log_helper.disable_logging()
-    dnn_log_header = f"framework:Pytorch {args_conf}"
-    dnn_log_helper.start_log_file(bench_name=model_name, header=dnn_log_header)
-    dnn_log_helper.set_max_errors_iter(max_errors=MAXIMUM_ERRORS_PER_ITERATION)
-
+    # Start the setup
+    dnn_log_helper.start_setup_log_file(framework_name="PyTorch", args_conf=args_conf, model_name=model_name,
+                                        max_errors_per_iteration=MAXIMUM_ERRORS_PER_ITERATION, generate=generate)
     # Main setup loop
     setup_iteration = 0
     with torch.no_grad():
@@ -329,12 +335,12 @@ def main():
                                                        dnn_type=dnn_type)
 
             setup_iteration += 1
-    timer.tic()
     if generate:
+        timer.tic()
         # dnn_gold_tensors = torch.stack(dnn_gold_tensors)
         torch.save(dnn_gold_tensors, gold_path)
-    timer.toc()
-    output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
+        timer.toc()
+        output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
 
     # finish the logfile
     dnn_log_helper.end_log_file()

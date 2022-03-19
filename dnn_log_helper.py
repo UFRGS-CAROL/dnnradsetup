@@ -17,19 +17,24 @@ def end_iteration():
         log_helper.end_iteration()
 
 
-def start_log_file(bench_name: str, header: str):
+#
+# def start_log_file(bench_name: str, header: str):
+#     if NOT_GOLDEN_GENERATION:
+#         log_helper.start_log_file(benchmark_name=bench_name, test_info=header)
+def start_setup_log_file(framework_name: str, args_conf: str, model_name: str, max_errors_per_iteration: int,
+                         generate: bool):
+    global NOT_GOLDEN_GENERATION
+    NOT_GOLDEN_GENERATION = not generate
     if NOT_GOLDEN_GENERATION:
-        log_helper.start_log_file(benchmark_name=bench_name, test_info=header)
+        dnn_log_header = f"framework:{framework_name} {args_conf}"
+        bench_name = f"{framework_name}-{model_name}"
+        log_helper.start_log_file(benchmark_name=bench_name, test_info=dnn_log_header)
+        log_helper.set_max_errors_iter(max_errors=max_errors_per_iteration)
 
 
 def end_log_file():
     if NOT_GOLDEN_GENERATION:
         log_helper.end_log_file()
-
-
-def disable_logging():
-    global NOT_GOLDEN_GENERATION
-    NOT_GOLDEN_GENERATION = False
 
 
 def log_info_detail(info_detail: str):

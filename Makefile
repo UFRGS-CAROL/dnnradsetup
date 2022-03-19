@@ -1,6 +1,9 @@
+# Just for debug purposes
 CLASSIFY = 1
 DISABLE_CONSOLE_LOGGING = 0
 BATCH_SIZE = 1
+# tensorflow or pytorch
+FRAMEWORK = pytorch
 
 ifeq ($(CLASSIFY), 1)
 DATASET = imagenet2012
@@ -20,15 +23,14 @@ PRECISION = fp32
 ITERATIONS = 10
 GOLDPATH = ./gold_$(MODEL)_$(PRECISION)_$(DATASET)_btsz_$(BATCH_SIZE).pt
 
-all: generate_pytorch test_pytorch
+EXEC = ./$(FRAMEWORK)_dnns.py
+all: generate test
 
-generate_pytorch:
-	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
+generate:
+	$(EXEC) --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
 					  --imglist $(IMGLIST) --goldpath $(GOLDPATH) --batchsize $(BATCH_SIZE) --generate
 
-test_pytorch:
-	./pytorch_dnns.py --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
+test:
+	$(EXEC) --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
 					  --imglist $(IMGLIST) --goldpath $(GOLDPATH) --batchsize $(BATCH_SIZE) --iterations $(ITERATIONS)
-generate_tensorflow:
-	./tensorflow_dnns.py --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
-                                          --imglist $(IMGLIST) --goldpath $(GOLDPATH) --generate
+

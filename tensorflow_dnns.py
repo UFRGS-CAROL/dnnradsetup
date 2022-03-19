@@ -58,6 +58,18 @@ DNN_MODELS = {
 }
 
 
+def is_not_close(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float) -> tensorflow.Tensor:
+    """ Function to be equivalent to PyTorch """
+    return tensorflow.greater(tensorflow.abs(tensorflow.subtract(rhs, lhs)), threshold)
+
+
+def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = None) -> bool:
+    if threshold:
+        return tensorflow.reduce_all(tensorflow.less_equal(tensorflow.abs(tensorflow.subtract(rhs, lhs)), threshold))
+    else:
+        return tensorflow.equal(rhs, lhs)
+
+
 def compare_classification(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor, batch_size: int,
                            setup_iteration: int, batch_iteration: int, current_image_names: list,
                            output_logger: logging.Logger) -> int:
@@ -67,7 +79,7 @@ def compare_classification(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tens
     #         dnn_output_tensor[3][i] = 34.2
     output_errors = 0
     # using the same approach as the detection, compare only the positions that differ
-    if tensorflow.reduce_all((tensorflow.math.equal(dnn_golden_tensor, dnn_output_tensor))) is False:
+    if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
         output_logger.error("Not equal output tensors")
         if dnn_golden_tensor.shape != dnn_output_tensor.shape:
             info_detail = f"Shapes differ on size {dnn_golden_tensor.shape} {dnn_output_tensor.shape}"
@@ -80,8 +92,8 @@ def compare_classification(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tens
         for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names,
                                                                           dnn_golden_tensor,
                                                                           dnn_output_tensor):
-            diff_tensor_index = tensorflow.raw_ops.ApproximateEqual(current_gold_tensor, current_output_tensor,
-                                                                    tolerance=CLASSIFICATION_THRESHOLD)
+            diff_tensor_index = is_not_close(rhs=current_gold_tensor, lhs=current_output_tensor,
+                                             threshold=CLASSIFICATION_ABS_THRESHOLD)
 
             output_errors += diff_tensor_index.sum()
             diff_detail = f"diff img:{img_name_i} scores:{diff_tensor_index.sum()}"
@@ -113,16 +125,12 @@ def compare_detection(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: t
         #     boxes_out[i][i % 4] = i
         #     labels_out[40 + i] = i
         #  It is better compare to a threshold
-        diff_scores_index = tensorflow.raw_ops.ApproximateEqual(scores_gold, scores_out,
-                                                                tolerance=DETECTION_SCORES_THRESHOLD)
-
-        diff_boxes_index = tensorflow.raw_ops.ApproximateEqual(boxes_gold, boxes_out,
-                                                               tolerance=DETECTION_SCORES_THRESHOLD)
+        diff_scores_index = is_not_close(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD)
+        diff_boxes_index = is_not_close(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD)
         # Labels are integers
         diff_labels_index = tensorflow.math.not_equal(labels_gold, labels_out)
 
-        if any([tensorflow.reduce_any(diff_boxes_index),
-                tensorflow.reduce_any(diff_labels_index),
+        if any([tensorflow.reduce_any(diff_boxes_index), tensorflow.reduce_any(diff_labels_index),
                 tensorflow.reduce_any(diff_scores_index)]):
             diff_scores = scores_out[diff_scores_index]
             # For boxes, we have to work with the indexes
@@ -256,12 +264,9 @@ def main():
     timer.toc()
     output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
 
-    # Start the setup if it is not generate
-    if generate:
-        dnn_log_helper.disable_logging()
-    dnn_log_header = f"framework:TensorFlow {args_conf}"
-    dnn_log_helper.start_log_file(bench_name=model_name, header=dnn_log_header)
-    dnn_log_helper.set_max_errors_iter(max_errors=MAXIMUM_ERRORS_PER_ITERATION)
+    # Start the setup
+    dnn_log_helper.start_setup_log_file(framework_name="TensorFlow", args_conf=args_conf, model_name=model_name,
+                                        max_errors_per_iteration=MAXIMUM_ERRORS_PER_ITERATION, generate=generate)
 
     # Main setup loop
     setup_iteration = 0

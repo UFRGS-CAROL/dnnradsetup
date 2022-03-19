@@ -127,6 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-libLogHelper/build
+libLogHelper
 /data/imagenet/
 /data/coco2017
