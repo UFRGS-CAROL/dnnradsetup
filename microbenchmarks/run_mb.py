@@ -7,7 +7,7 @@ import numpy as np
 from enum import Enum
 from time import time
 from PIL import Image
-from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import Conv2D, DepthwiseConv2D
 import dnn_log_helper as lh
 from tensorflow import convert_to_tensor
 from tensorflow.keras.initializers import Constant
