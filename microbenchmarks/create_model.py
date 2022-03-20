@@ -20,10 +20,10 @@ log = logging.getLogger("OpModelCreator")
 log.setLevel(logging.INFO)
 np.random.seed(0)
     
-def generate_random_input(output_size):
+def generate_random_input(output_size,op):
 
     rand_input = np.random.random(output_size)
-    output_file = "input_"+str(output_size[0])+"_"+str(output_size[1])+"_"+str(output_size[2])+"_"+str(output_size[3])
+    output_file = "input_"+op+"_"+str(output_size[0])+"_"+str(output_size[1])+"_"+str(output_size[2])+"_"+str(output_size[3])
 
     np.save(output_file, rand_input)
 
@@ -56,7 +56,7 @@ def main():
         input_size = np.append(input_size, 1)
     else:
         raise Exception("invalid op")    
-    out_file, out_arr = generate_random_input(input_size)
+    out_file, out_arr = generate_random_input(input_size,op)
 
     zero_count = np.sum(out_arr == 0)
     print(f'Generated input saved to `{out_file}` with dimensions {out_arr.shape} and {zero_count}')
