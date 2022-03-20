@@ -124,11 +124,11 @@ def compare_detection(dnn_output_tensor: Iterable, dnn_golden_tensor: Iterable, 
         boxes_out = copy_tensor_to_cpu_caller(out_batch_i["boxes"])
         labels_out = copy_tensor_to_cpu_caller(out_batch_i["labels"])
         scores_out = copy_tensor_to_cpu_caller(out_batch_i["scores"])
-        # Debug injection
-        for i in range(100):
-            scores_out[34 + i] = i
-            boxes_out[i][i % 4] = i
-            labels_out[40 + i] = i
+        # # Debug injection
+        # for i in range(100):
+        #     scores_out[34 + i] = i
+        #     boxes_out[i][i % 4] = i
+        #     labels_out[40 + i] = i
         #  It is better compare to a threshold
         if all([equal_caller(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
                 equal_caller(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
@@ -136,7 +136,7 @@ def compare_detection(dnn_output_tensor: Iterable, dnn_golden_tensor: Iterable, 
             # Logging the score indexes that in fact have errors
             for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
                 if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
-                    score_error = f"img:{img_name_i} scorei:{s_i} g:{score_gold} o:{score_out}"
+                    score_error = f"img:{img_name_i} scorei:{s_i} g:{score_gold:.6e} o:{score_out:.6e}"
                     output_logger.error(score_error)
                     dnn_log_helper.log_error_detail(score_error)
                     score_errors_count += 1
@@ -145,7 +145,8 @@ def compare_detection(dnn_output_tensor: Iterable, dnn_golden_tensor: Iterable, 
                 if equal_caller(box_gold, box_out, DETECTION_BOXES_ABS_THRESHOLD) is False:
                     gx1, gx2, gx3, gx4 = box_gold
                     ox1, ox2, ox3, ox4 = box_out
-                    box_error = f"img:{img_name_i} boxi:{b_i} gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
+                    box_error = f"img:{img_name_i} boxi:{b_i:.6e}"
+                    box_error += f" gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
                     box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
                     output_logger.error(box_error)
                     dnn_log_helper.log_error_detail(box_error)
@@ -166,10 +167,10 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
                            copy_tensor_to_cpu_caller: callable, equal_caller: callable) -> int:
     # Make sure that they are on CPU
     dnn_output_tensor_cpu = copy_tensor_to_cpu_caller(dnn_output_tensor)
-    # Debug injection
-    if setup_iteration + batch_iteration == 20:
-        for i in range(300, 900):
-            dnn_output_tensor_cpu[3][i] = 34.2
+    # # Debug injection
+    # if setup_iteration + batch_iteration == 20:
+    #     for i in range(300, 900):
+    #         dnn_output_tensor_cpu[3][i] = 34.2
     output_errors = 0
     # using the same approach as the detection, compare only the positions that differ
     if equal_caller(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:

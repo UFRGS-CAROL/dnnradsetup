@@ -8,12 +8,14 @@ from typing import Union
 
 import numpy
 import tensorflow
+import tensorflow_hub
 from PIL.Image import BICUBIC, BILINEAR
 from keras.applications import efficientnet
 from keras.applications import inception_v3
 from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
 from tensorflow import keras
+
 
 import console_logger
 from common_tf_and_pt import *
@@ -45,15 +47,66 @@ DNN_MODELS = {
     },
     # Object detection, segmentation, and keypoint
     SSD_MOBILENET_V2: {
-        "model": None,
+        # Inputs
+        # A three-channel image of variable size - the model does NOT support batching.
+        # The input tensor is a tf.uint8 tensor with shape [1, height, width, 3] with values in [0, 255].
+        # Outputs
+        # The output dictionary contains:
+        #     num_detections: a tf.int tensor with only one value, the number of detections [N].
+        #     detection_boxes: a tf.float32 tensor of shape [N, 4] containing bounding box coordinates in the following
+        #     order: [ymin, xmin, ymax, xmax].
+        #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
+        #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
+        #     raw_detection_boxes: a tf.float32 tensor of shape [1, M, 4] containing decoded detection boxes without
+        #     Non-Max suppression. M is the number of raw detections.
+        #     raw_detection_scores: a tf.float32 tensor of shape [1, M, 90] and contains class score logits for raw
+        #     detection boxes. M is the number of raw detections.
+        #     detection_anchor_indices: a tf.float32 tensor of shape [N] and contains the anchor indices of the
+        #     detections after NMS.
+        #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 91] and contains class
+        #     score distribution (including background) for detection boxes in the image including background class.
+        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2"),
         "type": DNNType.DETECTION, "interpolation": None
     },
-
     EFFICIENT_DET_LITE3: {
-        "model": None,
+        # Inputs
+        # A batch of three-channel images of variable size. The input tensor is a
+        # tf.uint8 tensor with shape [None, height, width, 3] with values in [0, 255].
+        # Outputs
+        # The output dictionary contains:
+        #     detection_boxes: a tf.float32 tensor of shape [N, 4]
+        #     containing bounding box coordinates in the following order: [ymin, xmin, ymax, xmax].
+        #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
+        #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
+        #     num_detections: a tf.int tensor with only one value, the number of detections [N].
+        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/efficientdet/lite3/detection/1"),
         "type": DNNType.DETECTION, "interpolation": None
 
     },
+    FASTER_RCNN_RESNET_FPN50: {
+        # Inputs
+        # A three-channel image of variable size - the model does NOT support batching. The input tensor is a tf.uint8
+        # tensor with shape [1, height, width, 3] with values in [0, 255].
+        # Outputs
+        # The output dictionary contains:
+        #     num_detections: a tf.int tensor with only one value, the number of detections [N].
+        #     detection_boxes: a tf.float32 tensor of shape [N, 4] containing bounding box coordinates in the following
+        #     order: [ymin, xmin, ymax, xmax].
+        #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
+        #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
+        #     raw_detection_boxes: a tf.float32 tensor of shape [1, M, 4] containing decoded detection boxes without
+        #     Non-Max suppression. M is the number of raw detections.
+        #     raw_detection_scores: a tf.float32 tensor of shape [1, M, 90] and contains class score logits for raw
+        #     detection boxes. M is the number of raw detections.
+        #     detection_anchor_indices: a tf.float32 tensor of shape [N] and contains the anchor indices of the
+        #     detections after NMS.
+        #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 90] and contains class score
+        #     distribution (including background) for detection boxes in the image including background class.
+        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_1024x1024/1"),
+        "type": DNNType.DETECTION, "interpolation": None
+    },
+    # Not available for tensorflow_hub yet
+    RETINA_NET_RESNET_FPN50: NotImplementedError
 }
 
 
@@ -212,7 +265,7 @@ def main():
             timer.tic()
             dnn_log_helper.start_iteration()
             with tensorflow.device(device):
-                current_output = dnn_model.predict(batched_input)
+                current_output = dnn_model(batched_input)
             dnn_log_helper.end_iteration()
             # show_classification_result(output=current_output, batch_size=batch_size, image_list=current_image_names)
 
