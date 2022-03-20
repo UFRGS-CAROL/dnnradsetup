@@ -10,7 +10,7 @@ from PIL import Image
 from tensorflow.keras.layers import Conv2D
 import dnn_log_helper as lh
 from tensorflow import convert_to_tensor
-from tensorflow.keras.initializers. import Constant
+from tensorflow.keras.initializers import Constant
 
 def set_input_n_op(input_image):
 
