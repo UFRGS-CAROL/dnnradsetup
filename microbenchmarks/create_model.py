@@ -12,10 +12,7 @@ from typing import Tuple, List
 import numpy as np
 import tensorflow as tf
 
-from src.util import MODELS_DIR, SCRIPTS_DIR, Operation, Plataform, echo_run, get_model_filename, get_model_name, get_path_relative_to_install_dir
 
-REL_MODELS_DIR = get_path_relative_to_install_dir(MODELS_DIR)
-REL_SCRIPTS_DIR = get_path_relative_to_install_dir(SCRIPTS_DIR)
 
 np.random.seed(0)
 
