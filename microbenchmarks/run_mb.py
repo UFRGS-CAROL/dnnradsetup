@@ -10,6 +10,7 @@ from PIL import Image
 from tensorflow.keras.layers import Conv2D
 import dnn_log_helper as lh
 from tensorflow import convert_to_tensor
+from tensorflow.keras.initializers. import Constant
 
 def set_input_n_op(input_image):
 
@@ -75,14 +76,14 @@ def main():
             if kernel_type == "ONES":
                 output = Conv2D(2, kernel_size, kernel_initializer="Ones")(input)
             elif kernel_type == "AVG":
-                output = Conv2D(2, kernel_size, kernel_initializer=tf.keras.initializers.Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
+                output = Conv2D(2, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
             else:
                 raise Exception("invalid kernel_type")
         elif operation == "DepthwiseConv2D":
             if kernel_type == "ONES":
                 y=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
             elif kernel_type == "AVG":
-                 y=DepthwiseConv2D(kernel_size,depthwise_initializer=tf.keras.initializers.Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
+                 y=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
             else:
                 raise Exception("invalid kernel_type")
         save_output_golden(output, golden_file)
