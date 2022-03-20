@@ -59,7 +59,7 @@ def main():
     # Setup log helper
     benchmarkName = "Arm"+operation
     benchmarkInfo = f"operation: {operation} input_file: {input_image_file} golden_file: {golden_file} iterations: {iterations}"
-    lh.start_log_file(benchmarkName, benchmarkInfo)
+    lh.start_setup_log_file("tensorflow", benchmarkInfo,benchmarkName,500,args.save_golden)
     lh.set_max_errors_iter(500)
     lh.set_max_infos_iter(1)
 
