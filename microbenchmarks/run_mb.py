@@ -81,9 +81,9 @@ def main():
                 raise Exception("invalid kernel_type")
         elif operation == "DepthwiseConv2D":
             if kernel_type == "ONES":
-                y=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
+                output=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
             elif kernel_type == "AVG":
-                 y=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
+                 output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
             else:
                 raise Exception("invalid kernel_type")
         save_output_golden(output, golden_file)
