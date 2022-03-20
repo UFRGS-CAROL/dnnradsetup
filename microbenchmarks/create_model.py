@@ -23,7 +23,7 @@ np.random.seed(0)
 def generate_random_input(output_size):
 
     rand_input = np.random.random(output_size)
-    output_file = "input_"+str(output_size[0])+"_"+str(output_size[1])+"_"+str(output_size[2])
+    output_file = "input_"+str(output_size[0])+"_"+str(output_size[1])+"_"+str(output_size[2])+"_"+str(output_size[3])
 
     np.save(output_file, rand_input)
 
