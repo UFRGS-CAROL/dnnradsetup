@@ -97,14 +97,14 @@ def main():
             if kernel_type == "ONES":
                 output = Conv2D(2, kernel_size, kernel_initializer="Ones")(input)
             elif kernel_type == "AVG":
-                output = Conv2D(2, kernel_size, kernel_initializer="glorot_uniform")(input)
+                output = Conv2D(2, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
             else:
                 raise Exception("invalid kernel_type")
         elif operation == "DepthwiseConv2D":
             if kernel_type == "ONES":
                 y=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
             elif kernel_type == "AVG":
-                 y=DepthwiseConv2D(kernel_size,depthwise_initializer='glorot_uniform')(input)
+                 y=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
             else:
                 raise Exception("invalid kernel_type")
         else:
