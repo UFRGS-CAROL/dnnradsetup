@@ -1,29 +1,48 @@
 import argparse
 import enum
+import logging
 import time
-from typing import Tuple
+from typing import Tuple, List, Iterable
 
 from PIL import Image
 
+# Classification
+import dnn_log_helper as dnn_log_helper
+
 INCEPTION_V3 = "InceptionV3"
 RESNET_50 = "ResNet-50"
-EFFICIENT_NET_B7 = "EfficientNet-B7"
+EFFICIENT_NET_B0 = "EfficientNet-B0"
+EFFICIENT_NET_B3 = "EfficientNet-B3"
+
+# Detection
 RETINA_NET_RESNET_FPN50 = "RetinaNetResNet-50FPN"
 FASTER_RCNN_RESNET_FPN50 = "FasterR-CNNResNet-50FPN"
 SSD_MOBILENET_V2 = "SSDMobileNetV2"
 EFFICIENT_DET_LITE3 = "EfficientDet-Lite3"
 
-ALL_DNNS = [RESNET_50, INCEPTION_V3, EFFICIENT_NET_B7,
-            RETINA_NET_RESNET_FPN50, FASTER_RCNN_RESNET_FPN50,
-            SSD_MOBILENET_V2, EFFICIENT_DET_LITE3]
+OPTIMAL_INPUT_SIZE = {
+    INCEPTION_V3: (224, 224),
+    RESNET_50: (224, 224),
+    EFFICIENT_NET_B0: (224, 224),
+    EFFICIENT_NET_B3: (300, 300),
+    # Detection does not need resizing
+    RETINA_NET_RESNET_FPN50: None,
+    FASTER_RCNN_RESNET_FPN50: None,
+    SSD_MOBILENET_V2: None,
+    EFFICIENT_DET_LITE3: None,
+
+}
+
+ALL_DNNS = [RESNET_50, INCEPTION_V3, EFFICIENT_NET_B0, EFFICIENT_NET_B3, RETINA_NET_RESNET_FPN50,
+            FASTER_RCNN_RESNET_FPN50, SSD_MOBILENET_V2, EFFICIENT_DET_LITE3]
 
 BATCH_SIZE_GPU = 5
 
-CLASSIFICATION_ABS_THRESHOLD = 1e-5
-DETECTION_BOXES_ABS_THRESHOLD = 1e-5
-DETECTION_SCORES_ABS_THRESHOLD = 1e-5
+CLASSIFICATION_ABS_THRESHOLD = 1e-6
+DETECTION_BOXES_ABS_THRESHOLD = 1e-6
+DETECTION_SCORES_ABS_THRESHOLD = 1e-6
 
-MAXIMUM_ERRORS_PER_ITERATION = 5000
+MAXIMUM_ERRORS_PER_ITERATION = 4096
 
 
 def parse_args():
@@ -86,8 +105,87 @@ class DNNType(enum.Enum):
         return str(self)
 
 
-def load_image_list(image_list_path: str) -> Tuple[list, list]:
+def load_image_list(image_list_path: str) -> Tuple[List[Image.Image], List[str]]:
     with open(image_list_path, 'r') as f:
         image_files = f.read().splitlines()
     images = list(map(Image.open, image_files))
     return images, image_files
+
+
+def compare_detection(dnn_output_tensor: Iterable, dnn_golden_tensor: Iterable, current_image_names: Iterable,
+                      output_logger: logging.Logger, copy_tensor_to_cpu_caller: callable,
+                      equal_caller: callable) -> int:
+    score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
+    for img_name_i, gold_batch_i, out_batch_i in zip(current_image_names,
+                                                     dnn_golden_tensor,
+                                                     dnn_output_tensor):
+        boxes_gold, labels_gold, scores_gold = gold_batch_i["boxes"], gold_batch_i["labels"], gold_batch_i["scores"]
+        # Make sure that we are on the CPU
+        boxes_out = copy_tensor_to_cpu_caller(out_batch_i["boxes"])
+        labels_out = copy_tensor_to_cpu_caller(out_batch_i["labels"])
+        scores_out = copy_tensor_to_cpu_caller(out_batch_i["scores"])
+        # Debug injection
+        for i in range(100):
+            scores_out[34 + i] = i
+            boxes_out[i][i % 4] = i
+            labels_out[40 + i] = i
+        #  It is better compare to a threshold
+        if all([equal_caller(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
+                equal_caller(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
+                equal_caller(labels_gold, labels_out)]) is False:
+            # Logging the score indexes that in fact have errors
+            for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
+                if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
+                    score_error = f"img:{img_name_i} scorei:{s_i} g:{score_gold} o:{score_out}"
+                    output_logger.error(score_error)
+                    dnn_log_helper.log_error_detail(score_error)
+                    score_errors_count += 1
+            # Logging the boxes indexes that in fact have errors
+            for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold, boxes_out)):
+                if equal_caller(box_gold, box_out, DETECTION_BOXES_ABS_THRESHOLD) is False:
+                    gx1, gx2, gx3, gx4 = box_gold
+                    ox1, ox2, ox3, ox4 = box_out
+                    box_error = f"img:{img_name_i} boxi:{b_i} gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
+                    box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
+                    output_logger.error(box_error)
+                    dnn_log_helper.log_error_detail(box_error)
+                    box_errors_count += 1
+            # Logging the boxes indexes that in fact have errors
+            for l_i, (label_gold, label_out) in enumerate(zip(labels_gold, labels_out)):
+                if label_gold != label_out:
+                    label_error = f"img:{img_name_i} labeli:{l_i} g:{label_gold} o:{label_out}"
+                    output_logger.error(label_error)
+                    dnn_log_helper.log_error_detail(label_error)
+                    labels_errors_count += 1
+
+    return score_errors_count + box_errors_count + labels_errors_count
+
+
+def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration: int,
+                           batch_iteration: int, current_image_names: list, output_logger: logging.Logger,
+                           copy_tensor_to_cpu_caller: callable, equal_caller: callable) -> int:
+    # Make sure that they are on CPU
+    dnn_output_tensor_cpu = copy_tensor_to_cpu_caller(dnn_output_tensor)
+    # Debug injection
+    if setup_iteration + batch_iteration == 20:
+        for i in range(300, 900):
+            dnn_output_tensor_cpu[3][i] = 34.2
+    output_errors = 0
+    # using the same approach as the detection, compare only the positions that differ
+    if equal_caller(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
+        output_logger.error("Not equal output tensors")
+        if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
+            error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
+            output_logger.error(error_detail)
+            dnn_log_helper.log_error_detail(error_detail)
+
+        for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
+                                                                          dnn_output_tensor_cpu):
+            for i, (gold, found) in enumerate(zip(current_gold_tensor, current_output_tensor)):
+                if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
+                    output_errors += 1
+                    error_detail = f"img:{img_name_i} setupit:{setup_iteration} "
+                    error_detail += f"batchti:{batch_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
+                    output_logger.error(error_detail)
+                    dnn_log_helper.log_error_detail(error_detail)
+    return output_errors
