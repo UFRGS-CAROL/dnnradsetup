@@ -8,14 +8,13 @@ from typing import Union
 
 import numpy
 import tensorflow
-import tensorflow_hub
+from tensorflow_hub import load as tf_hub_load
 from PIL.Image import BICUBIC, BILINEAR
 from keras.applications import efficientnet
 from keras.applications import inception_v3
 from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
 from tensorflow import keras
-
 
 import console_logger
 from common_tf_and_pt import *
@@ -65,8 +64,9 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 91] and contains class
         #     score distribution (including background) for detection boxes in the image including background class.
-        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2"),
-        "type": DNNType.DETECTION, "interpolation": None
+        "model": None,
+        "type": DNNType.DETECTION, "interpolation": None,
+        "transform": None,
     },
     EFFICIENT_DET_LITE3: {
         # Inputs
@@ -79,7 +79,7 @@ DNN_MODELS = {
         #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
         #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
         #     num_detections: a tf.int tensor with only one value, the number of detections [N].
-        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/efficientdet/lite3/detection/1"),
+        "model": None,
         "type": DNNType.DETECTION, "interpolation": None
 
     },
@@ -102,7 +102,7 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 90] and contains class score
         #     distribution (including background) for detection boxes in the image including background class.
-        "model": tensorflow_hub.load("https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_1024x1024/1"),
+        "model": None,
         "type": DNNType.DETECTION, "interpolation": None
     },
     # Not available for tensorflow_hub yet
@@ -175,10 +175,15 @@ def load_dataset(transforms: callable, interpolation: int, image_list_path: str,
     return input_tensor, image_list
 
 
-def load_model(precision: str, model_loader: callable, device: str, dnn_type: DNNType) -> keras.Model:
+def load_model(precision: str, model_loader: callable, device: str, dnn_type: DNNType, model_name: str) -> keras.Model:
     with tensorflow.device(device):
-        weights = 'imagenet' if dnn_type == DNNType.CLASSIFICATION else "coco2017"
-        dnn_model = model_loader(weights=weights)
+        if dnn_type == DNNType.CLASSIFICATION:
+            weights = 'imagenet'
+            dnn_model = model_loader(weights=weights)
+        elif dnn_type == DNNType.DETECTION:
+            model_path = f"data/tf_models/{model_name}/"
+            dnn_model = tf_hub_load(model_path)
+
         # It means that I want to convert the model into FP16, but make sure that it is not quantized
         if precision == "fp16":
             converter = tensorflow.lite.TFLiteConverter.from_keras_model(dnn_model)
@@ -226,7 +231,7 @@ def main():
     dnn_type = model_parameters["type"]
     transform = model_parameters["transform"]
     dnn_model = load_model(precision=precision, model_loader=model_parameters["model"],
-                           device=device, dnn_type=dnn_type)
+                           device=device, dnn_type=dnn_type, model_name=model_name)
 
     timer.toc()
     output_logger.debug(f"Time necessary to load the model and config it: {timer}")
@@ -299,7 +304,7 @@ def main():
             del input_list
             del dnn_model
             dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device,
-                                   dnn_type=dnn_type)
+                                   dnn_type=dnn_type, model_name=model_name)
             input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
                                                    logger=output_logger, batch_size=batch_size, device=device,
                                                    dnn_type=dnn_type, dnn_input_size=input_size,
