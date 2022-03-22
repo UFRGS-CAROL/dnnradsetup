@@ -28,8 +28,8 @@ def start_setup_log_file(framework_name: str, args_conf: str, model_name: str, m
     if NOT_GOLDEN_GENERATION:
         dnn_log_header = f"framework:{framework_name} {args_conf}"
         bench_name = f"{framework_name}-{model_name}"
-        log_helper.start_log_file(benchmark_name=bench_name, test_info=dnn_log_header)
-        log_helper.set_max_errors_iter(max_errors=max_errors_per_iteration)
+        log_helper.start_log_file(bench_name, dnn_log_header)
+        log_helper.set_max_errors_iter(max_errors_per_iteration)
 
 
 def end_log_file():
