@@ -230,8 +230,8 @@ def main():
                 timer.tic()
                 errors = 0
                 if generate is False:
-                    current_gold = dnn_gold_tensors[batch_i]
-                    errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
+                    errors = compare_output_with_gold(dnn_output_tensor=current_output,
+                                                      dnn_golden_tensor=dnn_gold_tensors[batch_i],
                                                       dnn_type=dnn_type, setup_iteration=setup_iteration,
                                                       batch_iteration=batch_iteration, output_logger=output_logger,
                                                       current_image_names=current_image_names)
@@ -261,7 +261,7 @@ def main():
             setup_iteration += 1
     if generate:
         timer.tic()
-        # dnn_gold_tensors = torch.stack(dnn_gold_tensors)
+        dnn_gold_tensors = torch.stack(dnn_gold_tensors).to("cpu")
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
