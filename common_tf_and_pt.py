@@ -211,4 +211,4 @@ def verify_network_accuracy(predictions: list, ground_truth_csv: str, dnn_type: 
         accuracy = merged["accuracy"].value_counts() / img_n
         print("Accuracy measured on the input subset:")
         print(f" - Correct predicted: {accuracy[True] * 100:.2f}%")
-        print(f" - Correct predicted: {accuracy[False] * 100:.2f}%")
+        print(f" - Incorrect predicted: {accuracy[False] * 100:.2f}%")
