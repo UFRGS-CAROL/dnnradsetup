@@ -69,28 +69,6 @@ DNN_MODELS = {
 }
 
 
-def show_classification_result(batch_input: torch.tensor, image_list: list):
-    from PIL import Image, ImageFont, ImageDraw
-    # importing the module
-    import json
-
-    # reading the data from the file
-    with open('data/imagenet-simple-labels.json') as f:
-        data = f.read()
-    # reconstructing the data as a dictionary
-    js = json.loads(data)
-    for tensor, img_str in zip(batch_input, image_list):
-        im = Image.open("data/imagenet/subset/" + img_str)
-        draw = ImageDraw.Draw(im)
-        labels = torch.topk(tensor, k=5).indices.squeeze(0)
-        probs = [torch.softmax(tensor, dim=-1)[idx].item() for idx in labels]
-        lab_text = "\n".join([f"{js[label]}:{prob}" for label, prob in zip(labels, probs)])
-        # draw.text((x, y),"Sample Text",(r,g,b))
-        draw.text((0, 0), lab_text, (0, 0, 0),
-                  font=ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 16, ))
-        im.show()
-
-
 def is_not_close(rhs: torch.Tensor, lhs: torch.Tensor, threshold: float) -> torch.Tensor:
     """ Function to be equivalent to TensorFlow ApproximateEqual """
     return torch.greater(torch.abs(torch.subtract(rhs, lhs)), threshold)
@@ -265,6 +243,8 @@ def main():
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
+        verify_network_accuracy(batched_input=input_list.numpy(), batched_output=dnn_gold_tensors.numpy(),
+                                ground_truth_csv=args.grtruthcsv)
 
     # finish the logfile
     dnn_log_helper.end_log_file()

@@ -8,13 +8,13 @@ from typing import Union
 
 import numpy
 import tensorflow
-from tensorflow_hub import load as tf_hub_load
 from PIL.Image import BICUBIC, BILINEAR
 from keras.applications import efficientnet
 from keras.applications import inception_v3
 from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
 from tensorflow import keras
+from tensorflow_hub import load as tf_hub_load
 
 import console_logger
 from common_tf_and_pt import *
@@ -65,7 +65,8 @@ DNN_MODELS = {
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 91] and contains class
         #     score distribution (including background) for detection boxes in the image including background class.
         "model": None,
-        "type": DNNType.DETECTION, "interpolation": None,
+        "type": DNNType.DETECTION,
+        "interpolation": None,
         "transform": None,
     },
     EFFICIENT_DET_LITE3: {
@@ -80,7 +81,8 @@ DNN_MODELS = {
         #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
         #     num_detections: a tf.int tensor with only one value, the number of detections [N].
         "model": None,
-        "type": DNNType.DETECTION, "interpolation": None
+        "type": DNNType.DETECTION,
+        "interpolation": None
 
     },
     FASTER_RCNN_RESNET_FPN50: {
@@ -103,10 +105,11 @@ DNN_MODELS = {
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 90] and contains class score
         #     distribution (including background) for detection boxes in the image including background class.
         "model": None,
-        "type": DNNType.DETECTION, "interpolation": None
+        "type": DNNType.DETECTION,
+        "interpolation": None
     },
     # Not available for tensorflow_hub yet
-    RETINA_NET_RESNET_FPN50: NotImplementedError
+    # RETINA_NET_RESNET_FPN50: NotImplementedError
 }
 
 
@@ -191,13 +194,6 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
             converter.target_spec.supported_types = [tensorflow.float16]
             dnn_model = converter.convert()
     return dnn_model
-
-
-def show_classification_result(output, batch_size, image_list):
-    from keras.applications.efficientnet import decode_predictions
-    for i in range(batch_size):
-        print("For image ", image_list[i])
-        print('Predicted:', decode_predictions(numpy.expand_dims(output[i], axis=0), top=5)[0])
 
 
 def main():
@@ -316,6 +312,8 @@ def main():
         with tensorflow.device("/CPU"):
             dnn_gold_tensors = numpy.array(dnn_gold_tensors)
             numpy.save(gold_path, dnn_gold_tensors)
+            verify_network_accuracy(batched_input=input_list.numpy(), batched_output=dnn_gold_tensors,
+                                    ground_truth_csv=args.grtruthcsv)
     timer.toc()
     output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
 

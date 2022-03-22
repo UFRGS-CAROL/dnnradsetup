@@ -59,6 +59,9 @@ def parse_args():
                         help="Set this flag disable console logging")
 
     parser.add_argument('--goldpath', help="Path to the gold file")
+    parser.add_argument('--grtruthcsv', help="Path ground truth verification at generate process.", default=None,
+                        type=str)
+
     args = parser.parse_args()
     # Check if the model is correct
     if args.model not in ALL_DNNS:
@@ -68,6 +71,8 @@ def parse_args():
     # Check if it is only to generate the gold values
     if args.generate:
         args.iterations = 1
+    else:
+        args.grtruthcsv = None
     args_text = " ".join([f"{k}={v}" for k, v in vars(args).items()])
     return args, args_text
 
@@ -190,3 +195,9 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
                     output_logger.error(error_detail)
                     dnn_log_helper.log_error_detail(error_detail)
     return output_errors
+
+
+def verify_network_accuracy(batched_input, batched_output, ground_truth_csv: str):
+    if ground_truth_csv:
+        print(type(batched_output))
+        print(type(batched_input))
