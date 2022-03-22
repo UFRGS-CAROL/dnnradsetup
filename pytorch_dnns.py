@@ -131,11 +131,21 @@ def load_dataset(transforms: torchvision.transforms, image_list_path: str, logge
 
 def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.Module:
     dnn_model = model_loader(pretrained=True)
-    dnn_model.eval()
+    dnn_model = dnn_model.eval()
     # It means that I want to convert the model into FP16, but make sure that it is not quantized
     if precision == "fp16":
         dnn_model = dnn_model.half()
     return dnn_model.to(device)
+
+
+def get_predictions(batched_output: torch.tensor, dnn_type: DNNType, img_names: list) -> list:
+    pred = list()
+    if dnn_type == DNNType.CLASSIFICATION:
+        for img, x in zip(img_names, batched_output):
+            prob, label = torch.max(x, 1)
+            pred.append({"img_name": img, "class_id_predicted": int(label[0])})
+
+    return pred
 
 
 def main():
@@ -243,8 +253,9 @@ def main():
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
-        verify_network_accuracy(batched_input=input_list.numpy(), batched_output=dnn_gold_tensors.numpy(),
-                                ground_truth_csv=args.grtruthcsv)
+        output_logger.debug(f"Accuracy measure")
+        verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names),
+                                ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
 
     # finish the logfile
     dnn_log_helper.end_log_file()

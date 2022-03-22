@@ -8,9 +8,11 @@ FRAMEWORK=pytorch
 ifeq ($(CLASSIFY), 1)
 DATASET = imagenet2012
 MODEL = ResNet-50
+GRT_CSV = data/imagenet/imagenet-subset-ground-truths.csv
 else
 DATASET = coco2017
 MODEL = RetinaNetResNet-50FPN
+GRT_CSV = data/coco2017/coco-subset-ground-truths.csv
 endif
 
 ifeq ($(DISABLE_CONSOLE_LOGGING), 1)
@@ -35,7 +37,7 @@ EXEC = ./$(FRAMEWORK)_dnns.py
 all: generate test
 
 generate:
-	$(EXEC) --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) \
+	$(EXEC) --model $(MODEL) --precision $(PRECISION) $(CONSOLE_LOGGING) --grtruthcsv $(GRT_CSV) \
 					  --imglist $(IMGLIST) --goldpath $(GOLD_PATH) --batchsize $(BATCH_SIZE) --generate
 
 test:

@@ -6,9 +6,9 @@ from typing import Tuple, List, Iterable
 
 from PIL import Image
 
-# Classification
 import dnn_log_helper as dnn_log_helper
 
+# Classification
 INCEPTION_V3 = "InceptionV3"
 RESNET_50 = "ResNet-50"
 EFFICIENT_NET_B0 = "EfficientNet-B0"
@@ -33,8 +33,7 @@ OPTIMAL_INPUT_SIZE = {
 
 }
 
-ALL_DNNS = [RESNET_50, INCEPTION_V3, EFFICIENT_NET_B0, EFFICIENT_NET_B3, RETINA_NET_RESNET_FPN50,
-            FASTER_RCNN_RESNET_FPN50, SSD_MOBILENET_V2, EFFICIENT_DET_LITE3]
+ALL_DNNS = list(OPTIMAL_INPUT_SIZE.keys())
 
 BATCH_SIZE_GPU = 5
 
@@ -197,8 +196,19 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
     return output_errors
 
 
-def verify_network_accuracy(batched_input, batched_output, ground_truth_csv: str):
+def verify_network_accuracy(predictions: list, ground_truth_csv: str, dnn_type: DNNType):
+    if ground_truth_csv is None:
+        return
     import pandas as pd
-    if ground_truth_csv:
-        ground_truth_df = pd.read_csv(ground_truth_csv)
-
+    ground_truth_df = pd.read_csv(ground_truth_csv)
+    if dnn_type == DNNType.CLASSIFICATION:
+        predictions_df = pd.DataFrame(predictions)
+        predictions_df["img_name"] = predictions_df["img_name"].str.replace(r".JPEG", "", regex=True)
+        merged = pd.merge(ground_truth_df, predictions_df, on="img_name")
+        img_n = ground_truth_df.shape[0]
+        assert merged.shape[0] == ground_truth_df.shape[0], "Incorrect merged"
+        merged["accuracy"] = merged["class_id"] == merged["class_id_predicted"]
+        accuracy = merged["accuracy"].value_counts() / img_n
+        print("Accuracy measured on the input subset:")
+        print(f" - Correct predicted: {accuracy[True] * 100:.2f}%")
+        print(f" - Correct predicted: {accuracy[False] * 100:.2f}%")
