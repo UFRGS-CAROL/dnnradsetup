@@ -196,6 +196,16 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
     return dnn_model
 
 
+def get_predictions(batched_output: tensorflow.Tensor, dnn_type: DNNType, img_names: list, model_name: str) -> list:
+    pred = list()
+    if dnn_type == DNNType.CLASSIFICATION:
+        decode = {EFFICIENT_NET_B0: efficientnet.decode_predictions, EFFICIENT_NET_B3: efficientnet.decode_predictions,
+                  INCEPTION_V3: inception_v3.decode_predictions, RESNET_50: resnet.decode_predictions}
+        decode_predictions = decode[model_name]
+        print(decode_predictions)
+    return pred
+
+
 def main():
     # tensorflow.debugging.set_log_device_placement(True)
     is_in_eager_mode = tensorflow.executing_eagerly()
@@ -312,8 +322,9 @@ def main():
         with tensorflow.device("/CPU"):
             dnn_gold_tensors = numpy.array(dnn_gold_tensors)
             numpy.save(gold_path, dnn_gold_tensors)
-            verify_network_accuracy(batched_input=input_list.numpy(), batched_output=dnn_gold_tensors,
-                                    ground_truth_csv=args.grtruthcsv)
+            verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type,
+                                                                img_names=image_names, model_name=model_name),
+                                    ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
     timer.toc()
     output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
 
