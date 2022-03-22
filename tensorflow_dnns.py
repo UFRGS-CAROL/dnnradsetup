@@ -202,7 +202,9 @@ def get_predictions(batched_output: tensorflow.Tensor, dnn_type: DNNType, img_na
         decode = {EFFICIENT_NET_B0: efficientnet.decode_predictions, EFFICIENT_NET_B3: efficientnet.decode_predictions,
                   INCEPTION_V3: inception_v3.decode_predictions, RESNET_50: resnet.decode_predictions}
         decode_predictions = decode[model_name]
-        print(decode_predictions)
+        for img, x in zip(img_names, batched_output):
+            prob, label = decode_predictions(x[0])
+            pred.append({"img_name": img, "class_id_predicted": int(label[0])})
     return pred
 
 
