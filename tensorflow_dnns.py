@@ -196,14 +196,11 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
     return dnn_model
 
 
-def get_predictions(batched_output: tensorflow.Tensor, dnn_type: DNNType, img_names: list, model_name: str) -> list:
+def get_predictions(batched_output: tensorflow.Tensor, dnn_type: DNNType, img_names: list) -> list:
     pred = list()
     if dnn_type == DNNType.CLASSIFICATION:
-        decode = {EFFICIENT_NET_B0: efficientnet.decode_predictions, EFFICIENT_NET_B3: efficientnet.decode_predictions,
-                  INCEPTION_V3: inception_v3.decode_predictions, RESNET_50: resnet.decode_predictions}
-        decode_predictions = decode[model_name]
         for img, x in zip(img_names, batched_output):
-            prob, label = decode_predictions(x[0])
+            label = tensorflow.argmax(x, 1)
             pred.append({"img_name": img, "class_id_predicted": int(label[0])})
     return pred
 
