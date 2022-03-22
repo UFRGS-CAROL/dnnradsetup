@@ -14,7 +14,6 @@ from keras.applications import inception_v3
 from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
 from tensorflow import keras
-from tensorflow_hub import load as tf_hub_load
 
 import console_logger
 from common_tf_and_pt import *
@@ -46,6 +45,7 @@ DNN_MODELS = {
     },
     # Object detection, segmentation, and keypoint
     SSD_MOBILENET_V2: {
+        # https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2
         # Inputs
         # A three-channel image of variable size - the model does NOT support batching.
         # The input tensor is a tf.uint8 tensor with shape [1, height, width, 3] with values in [0, 255].
@@ -64,12 +64,11 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 91] and contains class
         #     score distribution (including background) for detection boxes in the image including background class.
-        "model": None,
+        "model": None, "interpolation": None, "transform": None,
         "type": DNNType.DETECTION,
-        "interpolation": None,
-        "transform": None,
     },
     EFFICIENT_DET_LITE3: {
+        # https://tfhub.dev/tensorflow/efficientdet/lite3/detection/1
         # Inputs
         # A batch of three-channel images of variable size. The input tensor is a
         # tf.uint8 tensor with shape [None, height, width, 3] with values in [0, 255].
@@ -80,12 +79,11 @@ DNN_MODELS = {
         #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
         #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
         #     num_detections: a tf.int tensor with only one value, the number of detections [N].
-        "model": None,
+        "model": None, "interpolation": None, "transform": None,
         "type": DNNType.DETECTION,
-        "interpolation": None
-
     },
     FASTER_RCNN_RESNET_FPN50: {
+        # https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_1024x1024/1
         # Inputs
         # A three-channel image of variable size - the model does NOT support batching. The input tensor is a tf.uint8
         # tensor with shape [1, height, width, 3] with values in [0, 255].
@@ -104,9 +102,8 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 90] and contains class score
         #     distribution (including background) for detection boxes in the image including background class.
-        "model": None,
+        "model": None, "interpolation": None, "transform": None,
         "type": DNNType.DETECTION,
-        "interpolation": None
     },
     # Not available for tensorflow_hub yet
     # RETINA_NET_RESNET_FPN50: NotImplementedError
@@ -167,12 +164,12 @@ def load_dataset(transforms: callable, interpolation: int, image_list_path: str,
             input_tensor = tensorflow.stack(
                 [transforms(img_to_array(img.resize(dnn_input_size, resample=interpolation))) for img in images]
             )
+            # Split here is different
+            num_of_splits = int(input_tensor.shape[0] / batch_size)
+            input_tensor = tensorflow.split(input_tensor, num_or_size_splits=num_of_splits)
         else:
-            raise NotImplementedError
-        # Split here is different
-        num_of_splits = int(input_tensor.shape[0] / batch_size)
-        input_tensor = tensorflow.split(input_tensor, num_or_size_splits=num_of_splits)
-        # Remove the base path
+            input_tensor = [tensorflow.expand_dims(img_to_array(img, dtype=numpy.uint8), axis=0) for img in images]
+
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor, image_list
@@ -184,8 +181,9 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
             weights = 'imagenet'
             dnn_model = model_loader(weights=weights)
         elif dnn_type == DNNType.DETECTION:
-            model_path = f"data/tf_models/{model_name}/"
-            dnn_model = tf_hub_load(model_path)
+            # FIXME: find a way to speedup the model load
+            model_path = f"data/tf_models/{model_name}"
+            dnn_model = tensorflow.saved_model.load(model_path)
 
         # It means that I want to convert the model into FP16, but make sure that it is not quantized
         if precision == "fp16":
@@ -291,7 +289,6 @@ def main():
                                                   batch_iteration=batch_iteration, output_logger=output_logger,
                                                   current_image_names=current_image_names)
             else:
-                assert len(current_output) == batch_size, str(current_output)
                 dnn_gold_tensors.append(current_output)
 
             total_errors += errors
@@ -324,9 +321,9 @@ def main():
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
             output_logger.debug(f"Accuracy measure")
-            verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type,
-                                                                img_names=image_names),
-                                    ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
+            # verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type,
+            #                                                     img_names=image_names),
+            #                         ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
