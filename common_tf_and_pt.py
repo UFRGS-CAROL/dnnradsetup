@@ -198,6 +198,7 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
 
 
 def verify_network_accuracy(batched_input, batched_output, ground_truth_csv: str):
+    import pandas as pd
     if ground_truth_csv:
-        print(type(batched_output))
-        print(type(batched_input))
+        ground_truth_df = pd.read_csv(ground_truth_csv)
+
