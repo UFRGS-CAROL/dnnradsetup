@@ -321,11 +321,12 @@ def main():
         with tensorflow.device("/CPU"):
             dnn_gold_tensors = numpy.array(dnn_gold_tensors)
             numpy.save(gold_path, dnn_gold_tensors)
+            timer.toc()
+            output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
+            output_logger.debug(f"Accuracy measure")
             verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type,
                                                                 img_names=image_names),
                                     ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
-    timer.toc()
-    output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
 
     # finish the logfile
     dnn_log_helper.end_log_file()
