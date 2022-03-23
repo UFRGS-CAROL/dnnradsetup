@@ -16,31 +16,28 @@ from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
 
 import console_logger
+import tensorflow_lite_utils
 from common_tf_and_pt import *
 
 DNN_MODELS = {
     INCEPTION_V3: {
         "model": inception_v3.InceptionV3,
         "type": DNNType.CLASSIFICATION,
-        "transform": inception_v3.preprocess_input,
         "interpolation": BILINEAR
     },
     RESNET_50: {
         "model": resnet.ResNet50,
         "type": DNNType.CLASSIFICATION,
-        "transform": resnet.preprocess_input,
         "interpolation": BILINEAR
     },
     EFFICIENT_NET_B0: {
         "model": efficientnet.EfficientNetB0,
         "type": DNNType.CLASSIFICATION,
-        "transform": efficientnet.preprocess_input,
         "interpolation": BILINEAR
     },
     EFFICIENT_NET_B3: {
         "model": efficientnet.EfficientNetB3,
         "type": DNNType.CLASSIFICATION,
-        "transform": efficientnet.preprocess_input,
         "interpolation": BICUBIC
     },
     # Object detection, segmentation, and keypoint
@@ -64,8 +61,7 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 91] and contains class
         #     score distribution (including background) for detection boxes in the image including background class.
-        "model": None, "interpolation": None, "transform": None,
-        "type": DNNType.DETECTION,
+        "model": None, "interpolation": None, "type": DNNType.DETECTION,
     },
     EFFICIENT_DET_LITE3: {
         # https://tfhub.dev/tensorflow/efficientdet/lite3/detection/1
@@ -79,8 +75,7 @@ DNN_MODELS = {
         #     detection_scores: a tf.float32 tensor of shape [N] containing detection scores.
         #     detection_classes: a tf.int tensor of shape [N] containing detection class index from the label file.
         #     num_detections: a tf.int tensor with only one value, the number of detections [N].
-        "model": None, "interpolation": None, "transform": None,
-        "type": DNNType.DETECTION,
+        "model": None, "interpolation": None, "type": DNNType.DETECTION,
     },
     FASTER_RCNN_RESNET_FPN50: {
         # https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_1024x1024/1
@@ -102,8 +97,7 @@ DNN_MODELS = {
         #     detections after NMS.
         #     detection_multiclass_scores: a tf.float32 tensor of shape [1, N, 90] and contains class score
         #     distribution (including background) for detection boxes in the image including background class.
-        "model": None, "interpolation": None, "transform": None,
-        "type": DNNType.DETECTION,
+        "model": None, "interpolation": None, "type": DNNType.DETECTION,
     },
     # Not available for tensorflow_hub yet
     # RETINA_NET_RESNET_FPN50: NotImplementedError
@@ -150,7 +144,8 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
     return output_errors
 
 
-def load_dataset(transforms: callable, interpolation: int, image_list_path: str, logger: logging.Logger,
+def load_dataset(interpolation: int,
+                 image_list_path: str, logger: logging.Logger,
                  batch_size: int, device: str, dnn_type: DNNType,
                  dnn_input_size: tuple, use_tflite: bool) -> Tuple[Union[tensorflow.Tensor, list], list]:
     timer = Timer()
@@ -160,19 +155,19 @@ def load_dataset(transforms: callable, interpolation: int, image_list_path: str,
     assert batch_size <= len(image_list), "Batch size must be equal or smaller than img list"
     with tensorflow.device(device):
         if use_tflite is False and dnn_type == DNNType.CLASSIFICATION:
-            # Equivalent to pytorch resize + to_tensor
-            input_tensor = tensorflow.stack(
-                [transforms(img_to_array(img.resize(dnn_input_size, resample=interpolation))) for img in
-                 images]
-            )
-            # Split here is different
-            num_of_splits = int(input_tensor.shape[0] / batch_size)
-            input_tensor = tensorflow.split(input_tensor, num_or_size_splits=num_of_splits)
+            input_tensor = list()
+            for img in images:
+                new_img = img_to_array(img.resize(dnn_input_size, resample=interpolation), dtype=numpy.uint8)
+                input_tensor.append(tensorflow.expand_dims(new_img, axis=0))
         elif use_tflite is False and dnn_type == DNNType.DETECTION:
             input_tensor = [tensorflow.expand_dims(img_to_array(img, dtype=numpy.uint8), axis=0) for img in images]
         else:
-            input_tensor = [tensorflow.expand_dims(img_to_array(
-                img.resize(dnn_input_size, resample=interpolation), dtype=numpy.uint8), axis=0) for img in images]
+            input_tensor = list()
+            for img, filename in zip(images, image_list):
+                w, h = img.size
+                scale = min(dnn_input_size[0] / w, dnn_input_size[0] / h)
+                input_tensor.append({'data': img.resize(dnn_input_size, resample=interpolation),
+                                     'scale': scale})
 
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
@@ -180,7 +175,7 @@ def load_dataset(transforms: callable, interpolation: int, image_list_path: str,
 
 
 def load_model(precision: str, model_loader: callable, device: str, dnn_type: DNNType, model_name: str,
-               use_tflite: bool) -> Union[keras.Model, Tuple[tensorflow.lite.Interpreter, List, List]]:
+               use_tflite: bool) -> Union[keras.Model, tensorflow.lite.Interpreter]:
     with tensorflow.device(device):
         model_path = f"{os.path.dirname(os.path.realpath(__file__))}/data/tf_models/{model_name}"
         if use_tflite is False:
@@ -188,15 +183,10 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
                 weights = 'imagenet'
                 dnn_model = model_loader(weights=weights)
             elif dnn_type == DNNType.DETECTION:
-                # FIXME: find a way to speedup the model load
                 dnn_model = tensorflow.saved_model.load(model_path)
         else:
-            interpreter = tensorflow.lite.Interpreter(model_path=model_path + ".tflite", num_threads=os.cpu_count())
-            interpreter.allocate_tensors()
-            input_details = interpreter.get_input_details()
-            output_details = interpreter.get_output_details()
-            dnn_model = [interpreter, input_details, output_details]
-
+            dnn_model = tensorflow_lite_utils.create_interpreter(model_file=model_path + ".tflite")
+            dnn_model.allocate_tensors()
         # # It means that I want to convert the model into FP16, but make sure that it is not quantized
         if precision == "fp16":
             raise NotImplementedError("Not implemented for Tensorflow")
@@ -207,20 +197,26 @@ def load_model(precision: str, model_loader: callable, device: str, dnn_type: DN
     return dnn_model
 
 
-def verify_network_accuracy(batched_output: tensorflow.Tensor, dnn_type: DNNType, img_names: list,
-                            ground_truth_csv: str):
+def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: DNNType, img_names: list,
+                            ground_truth_csv: str, use_tflite: bool):
     from verify_accuracy import verify_classification_accuracy, verify_detection_accuracy
-    if dnn_type == DNNType.CLASSIFICATION:
+    if use_tflite is False:
         if dnn_type == DNNType.CLASSIFICATION:
-            pred = list()
             if dnn_type == DNNType.CLASSIFICATION:
-                for img, x in zip(img_names, batched_output):
-                    label = tensorflow.argmax(x, 1)
-                    pred.append({"img_name": img, "class_id_predicted": int(label[0])})
-            verify_classification_accuracy(pred, ground_truth_csv)
+                pred = list()
+                if dnn_type == DNNType.CLASSIFICATION:
+                    for img, x in zip(img_names, batched_output):
+                        label = tensorflow.argmax(x, 1)
+                        pred.append({"img_name": img, "class_id_predicted": int(label[0])})
+                verify_classification_accuracy(pred, ground_truth_csv)
+        else:
+            pred = list()
+            verify_detection_accuracy(pred, ground_truth_csv)
     else:
         pred = list()
-        verify_detection_accuracy(pred, ground_truth_csv)
+        for img, x in zip(img_names, batched_output):
+            pred.append({"img_name": img, "class_id_predicted": x[0].id - 1})
+        verify_classification_accuracy(pred, ground_truth_csv)
 
 
 def main():
@@ -253,16 +249,8 @@ def main():
     input_size = OPTIMAL_INPUT_SIZE[model_name]
     interpolation = model_parameters["interpolation"]
     dnn_type = model_parameters["type"]
-    transform = model_parameters["transform"]
     dnn_model = load_model(precision=precision, model_loader=model_parameters["model"],
                            device=device, dnn_type=dnn_type, model_name=model_name, use_tflite=use_tf_lite)
-
-    input_details, output_details = None, None
-    if use_tf_lite:
-        dnn_model, input_details, output_details = dnn_model
-        height = input_details[0]['shape'][1]
-        width = input_details[0]['shape'][2]
-        input_size = (width, height)
 
     timer.toc()
     output_logger.debug(f"Time necessary to load the model and config it: {timer}")
@@ -270,7 +258,7 @@ def main():
     # First step is to load the inputs in the memory
     timer.tic()
 
-    input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path, logger=output_logger,
+    input_list, image_names = load_dataset(image_list_path=image_list_path, logger=output_logger,
                                            batch_size=batch_size, device=device, dnn_type=dnn_type,
                                            dnn_input_size=input_size, interpolation=interpolation,
                                            use_tflite=use_tf_lite)
@@ -294,6 +282,7 @@ def main():
 
     # Main setup loop
     setup_iteration = 0
+    check_tflite_accuracy = list()
     while setup_iteration < iterations:
         total_errors = 0
         # Loop over the input list
@@ -304,9 +293,14 @@ def main():
             dnn_log_helper.start_iteration()
             with tensorflow.device(device):
                 if use_tf_lite:
-                    dnn_model.set_tensor(input_details[0]['index'], batched_input)
+                    image = batched_input['data']
+                    tensorflow_lite_utils.set_input(interpreter=dnn_model, data=image)
                     dnn_model.invoke()
-                    current_output = dnn_model.get_tensor(output_details[0]['index'])
+                    if dnn_type == DNNType.CLASSIFICATION:
+                        current_output = tensorflow_lite_utils.get_classification_scores(interpreter=dnn_model)
+                        check_tflite_accuracy.append(tensorflow_lite_utils.get_classes(interpreter=dnn_model))
+                    elif dnn_type == DNNType.DETECTION:
+                        current_output = tensorflow_lite_utils.get_objects(interpreter=dnn_model, nparray=True)
                 else:
                     current_output = dnn_model(batched_input)
             dnn_log_helper.end_iteration()
@@ -335,7 +329,6 @@ def main():
             time_pct = (comparison_time / (comparison_time + kernel_time)) * 100.0
             iteration_out += f", gold compare time:{comparison_time:.5f} ({time_pct:.1f}%) errors:{errors}"
             output_logger.debug(iteration_out)
-
         # Reload after error
         if total_errors != 0:
             del input_list
@@ -345,7 +338,7 @@ def main():
             if use_tf_lite:
                 dnn_model, input_details, output_details = dnn_model
 
-            input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
+            input_list, image_names = load_dataset(image_list_path=image_list_path,
                                                    logger=output_logger, batch_size=batch_size, device=device,
                                                    dnn_type=dnn_type, dnn_input_size=input_size,
                                                    interpolation=interpolation, use_tflite=use_tf_lite)
@@ -359,8 +352,12 @@ def main():
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
             output_logger.debug(f"Accuracy measure")
-            verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
-                                    ground_truth_csv=args.grtruthcsv)
+            if check_tflite_accuracy:
+                verify_network_accuracy(batched_output=check_tflite_accuracy, dnn_type=dnn_type, img_names=image_names,
+                                        ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
+            else:
+                verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
+                                        ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
@@ -368,79 +365,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# def compare_classification(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor,
-#                            setup_iteration: int, batch_iteration: int, current_image_names: list,
-#                            output_logger: logging.Logger) -> int:
-#     # # Debug injection
-#     # if setup_iteration + batch_iteration == 20:
-#     #     for i in range(300, 900):
-#     #         dnn_output_tensor[3][i] = 34.2
-#
-#     output_errors = 0
-#     # using the same approach as the detection, compare only the positions that differ
-#     if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
-#         output_logger.error("Not equal output tensors")
-#         if dnn_golden_tensor.shape != dnn_output_tensor.shape:
-#             error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor.shape}"
-#             output_logger.error(error_detail)
-#             dnn_log_helper.log_error_detail(error_detail)
-#
-#         for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
-#                                                                           dnn_output_tensor):
-#             for i, (gold, found) in enumerate(zip(current_gold_tensor, current_output_tensor)):
-#                 if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
-#                     output_errors += 1
-#                     error_detail = f"img:{img_name_i} sit:{setup_iteration} "
-#                     error_detail += f"bti:{batch_iteration} pos:{i} g:{gold:.6e} o:{found:.6e}"
-#                     output_logger.error(error_detail)
-#                     dnn_log_helper.log_error_detail(error_detail)
-#     return output_errors
-#
-#
-# def compare_detection(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor:
-# tensorflow.Tensor, batch_iteration: int,
-#                       current_image_names: list, output_logger: logging.Logger) -> int:
-#     score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
-#     for img_name_i, gold_batch_i, out_batch_i in zip(current_image_names, dnn_golden_tensor, dnn_output_tensor):
-#         boxes_gold, labels_gold, scores_gold = gold_batch_i["boxes"], gold_batch_i["labels"], gold_batch_i["scores"]
-#         # Make sure that we are on the CPU
-#         boxes_out = out_batch_i["boxes"]
-#         labels_out = out_batch_i["labels"]
-#         scores_out = out_batch_i["scores"]
-#         # for i in range(10):
-#         #     scores_out[34 + i] = i
-#         #     boxes_out[i][i % 4] = i
-#         #     labels_out[40 + i] = i
-#         #  It is better compare to a threshold
-#         if all([equal(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
-#                 equal(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
-#                 equal(labels_gold, labels_out)]):
-#
-#             # Logging the score indexes that in fact have errors
-#             for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
-#                 if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
-#                     score_error = f"img:{img_name_i} scorei:{s_i} g:{score_gold} o:{score_out}"
-#                     output_logger.error(score_error)
-#                     dnn_log_helper.log_error_detail(score_error)
-#                     score_errors_count += 1
-#
-#             # Logging the boxes indexes that in fact have errors
-#             for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold, boxes_out)):
-#                 if equal(box_gold, box_out, DETECTION_BOXES_ABS_THRESHOLD) is False:
-#                     gx1, gx2, gx3, gx4 = box_gold
-#                     ox1, ox2, ox3, ox4 = box_out
-#                     box_error = f"img:{img_name_i} boxi:{b_i} gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
-#                     box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
-#                     output_logger.error(box_error)
-#                     dnn_log_helper.log_error_detail(box_error)
-#                     box_errors_count += 1
-#             # Logging the boxes indexes that in fact have errors
-#             for l_i, (label_gold, label_out) in enumerate(zip(labels_gold, labels_out)):
-#                 if label_gold != label_out:
-#                     label_error = f"img:{img_name_i} labeli:{l_i} g:{label_gold} o:{label_out}"
-#                     output_logger.error(label_error)
-#                     dnn_log_helper.log_error_detail(label_error)
-#                     labels_errors_count += 1
-#
-#     return score_errors_count + box_errors_count + labels_errors_count

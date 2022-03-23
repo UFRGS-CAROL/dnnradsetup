@@ -103,9 +103,9 @@ def verify_classification_accuracy(predictions: list, ground_truth_csv: str):
     predictions_df = pd.DataFrame(predictions)
     predictions_df["img_name"] = predictions_df["img_name"].str.replace(r".JPEG", "", regex=True)
     merged = pd.merge(ground_truth_df, predictions_df, on="img_name")
-    img_n = ground_truth_df.shape[0]
     assert merged.shape[0] == ground_truth_df.shape[0], "Incorrect merged"
     merged["accuracy"] = merged["class_id"] == merged["class_id_predicted"]
+    img_n = ground_truth_df.shape[0]
     accuracy = merged["accuracy"].value_counts() / img_n
     print("Accuracy measured on the input subset:")
     print(f" - Correct predicted: {accuracy[True] * 100:.2f}%")
