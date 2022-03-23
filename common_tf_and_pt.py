@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument('--goldpath', help="Path to the gold file")
     parser.add_argument('--grtruthcsv', help="Path ground truth verification at generate process.", default=None,
                         type=str)
-
+    parser.add_argument('--tflite', default=False, action="store_true", help="Is it necessary to use Tensorflow lite.")
     args = parser.parse_args()
     # Check if the model is correct
     if args.model not in ALL_DNNS:
@@ -194,21 +194,3 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
                     output_logger.error(error_detail)
                     dnn_log_helper.log_error_detail(error_detail)
     return output_errors
-
-
-def verify_network_accuracy(predictions: list, ground_truth_csv: str, dnn_type: DNNType):
-    if ground_truth_csv is None:
-        return
-    import pandas as pd
-    ground_truth_df = pd.read_csv(ground_truth_csv)
-    if dnn_type == DNNType.CLASSIFICATION:
-        predictions_df = pd.DataFrame(predictions)
-        predictions_df["img_name"] = predictions_df["img_name"].str.replace(r".JPEG", "", regex=True)
-        merged = pd.merge(ground_truth_df, predictions_df, on="img_name")
-        img_n = ground_truth_df.shape[0]
-        assert merged.shape[0] == ground_truth_df.shape[0], "Incorrect merged"
-        merged["accuracy"] = merged["class_id"] == merged["class_id_predicted"]
-        accuracy = merged["accuracy"].value_counts() / img_n
-        print("Accuracy measured on the input subset:")
-        print(f" - Correct predicted: {accuracy[True] * 100:.2f}%")
-        print(f" - Incorrect predicted: {accuracy[False] * 100:.2f}%")

@@ -138,14 +138,19 @@ def load_model(precision: str, model_loader: callable, device: str) -> torch.nn.
     return dnn_model.to(device)
 
 
-def get_predictions(batched_output: torch.tensor, dnn_type: DNNType, img_names: list) -> list:
-    pred = list()
+def verify_network_accuracy(batched_output: torch.tensor, dnn_type: DNNType, img_names: list, ground_truth_csv: str):
+    from verify_accuracy import verify_classification_accuracy, verify_detection_accuracy
     if dnn_type == DNNType.CLASSIFICATION:
-        for img, x in zip(img_names, batched_output):
-            prob, label = torch.max(x, 1)
-            pred.append({"img_name": img, "class_id_predicted": int(label[0])})
+        if dnn_type == DNNType.CLASSIFICATION:
+            pred = list()
+            for img, x in zip(img_names, batched_output):
+                prob, label = torch.max(x, 1)
+                pred.append({"img_name": img, "class_id_predicted": int(label[0])})
 
-    return pred
+            verify_classification_accuracy(pred, ground_truth_csv)
+    else:
+        pred = list()
+        verify_detection_accuracy(pred, ground_truth_csv)
 
 
 def main():
@@ -254,8 +259,8 @@ def main():
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
         output_logger.debug(f"Accuracy measure")
-        verify_network_accuracy(predictions=get_predictions(dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names),
-                                ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type)
+        verify_network_accuracy(batched_output=dnn_gold_tensors, ground_truth_csv=args.grtruthcsv, dnn_type=dnn_type,
+                                img_names=image_names)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
