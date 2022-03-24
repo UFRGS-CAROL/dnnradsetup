@@ -231,7 +231,7 @@ def main():
                                                       current_image_names=current_image_names)
                 else:
                     assert len(current_output) == batch_size, str(current_output)
-                    dnn_gold_tensors.append(current_output.to(device))
+                    dnn_gold_tensors.append([cc.to(device) for cc in current_output])
 
                 total_errors += errors
                 timer.toc()
