@@ -25,10 +25,10 @@ OPTIMAL_INPUT_SIZE = {
     RESNET_50: (224, 224),
     EFFICIENT_NET_B0: (224, 224),
     EFFICIENT_NET_B3: (300, 300),
-    # Detection does not need resizing
+    # Detection does not need resizing (this values are for tflite)
     RETINA_NET_RESNET_FPN50: None,
     FASTER_RCNN_RESNET_FPN50: None,
-    SSD_MOBILENET_V2: None,
+    SSD_MOBILENET_V2: (300, 300),
     EFFICIENT_DET_LITE3: None,
 
 }
