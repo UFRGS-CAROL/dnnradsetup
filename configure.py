@@ -39,11 +39,14 @@ def main():
     jsons_path = f"data/{hostname}_jsons"
     if os.path.isdir(jsons_path) is False:
         os.mkdir(jsons_path)
-
+    print("Download all the models")
+    os.system("./download_models.py")
     current_directory = os.getcwd()
     for dnn_model, config_vals in DNN_MODELS.items():
         for framework in FRAMEWORKS:
             for use_tf_lite in [False, True]:
+                if framework != "tensorflow" and use_tf_lite is True:
+                    continue
                 dnn_type = config_vals["type"]
                 dataset = config_vals["dataset"]
                 # Default filename will build the other names
@@ -56,7 +59,7 @@ def main():
                 dataset_img_list = f"{current_directory}/data/{dataset}_img_list.txt"
 
                 parameters = [
-                    f"{current_directory}/{script_name}"
+                    f"{current_directory}/{script_name} "
                     f"--model {dnn_model}",
                     f"--imglist {dataset_img_list}",
                     "--precision fp32",
@@ -69,6 +72,7 @@ def main():
 
                 generate_parameters = parameters + ["--generate"]
                 generate_parameters.remove("--disableconsolelog")
+                generate_cmd = " ".join(generate_parameters)
 
                 exec_cmd = " ".join(parameters)
                 command_list = [{
@@ -80,6 +84,10 @@ def main():
                 # dump json
                 with open(json_file_name, "w") as json_fp:
                     json.dump(obj=command_list, fp=json_fp, indent=4)
+
+                print(f"Executing generate for {generate_cmd}")
+                if os.system(generate_cmd) != 0:
+                    raise OSError(f"Could not execute command {generate_cmd}")
 
     print("Json creation and golden generation finished")
     print(f"You may run: scp -r {jsons_path} carol@{server_ip}:"
