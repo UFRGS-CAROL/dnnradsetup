@@ -123,7 +123,7 @@ def copy_tensor_to_cpu(x_tensor):
 
 def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor,
                              dnn_type: DNNType, setup_iteration: int, batch_iteration: int, current_image_names: list,
-                             output_logger: logging.Logger) -> int:
+                             output_logger: logging.Logger, use_tflite: bool) -> int:
     output_errors = 0
     # Make sure that they are on CPU
     with tensorflow.device('/CPU'):
@@ -135,11 +135,19 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                                    copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                                    equal_caller=equal)
         elif dnn_type == DNNType.DETECTION:
-            output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
-                                              current_image_names=current_image_names,
-                                              output_logger=output_logger,
-                                              copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
-                                              equal_caller=equal)
+            if use_tflite is False:
+                output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
+                                                  current_image_names=current_image_names,
+                                                  output_logger=output_logger,
+                                                  copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
+                                                  equal_caller=equal)
+            else:              
+                for output_tensor_elem, gold_tensor_elem in zip(dnn_output_tensor,dnn_golden_tensor):
+                    for output_elem, gold_elem in zip(output_tensor_elem,gold_tensor_elem):
+                        #print(output_elem)
+                        #print(gold_elem)
+                        if output_elem != gold_elem:
+                            output_errors+=1
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
@@ -165,6 +173,7 @@ def load_dataset(interpolation: int,
             input_tensor = list()
             for img, filename in zip(images, image_list):
                 w, h = img.size
+
                 scale = min(dnn_input_size[0] / w, dnn_input_size[0] / h)
                 input_tensor.append({'data': img.resize(dnn_input_size, resample=interpolation),
                                      'scale': scale})
@@ -213,11 +222,24 @@ def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: 
             pred = list()
             verify_detection_accuracy(pred, ground_truth_csv)
     else:
+        return
         pred = list()
         for img, x in zip(img_names, batched_output):
+            print(x[0])
             pred.append({"img_name": img, "class_id_predicted": x[0].id - 1})
         verify_classification_accuracy(pred, ground_truth_csv)
 
+
+def check_output_against_golden(output, golden_file):    
+    if os.path.isfile(golden_file):
+        golden = np.load(golden_file)
+        if numpy.array_equal(golden,output):
+            return True
+        else:
+            return False
+        
+    else:
+        raise FileNotFoundError
 
 def main():
     # tensorflow.debugging.set_log_device_placement(True)
@@ -316,7 +338,7 @@ def main():
                 errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
                                                   dnn_type=dnn_type, setup_iteration=setup_iteration,
                                                   batch_iteration=batch_iteration, output_logger=output_logger,
-                                                  current_image_names=current_image_names)
+                                                  current_image_names=current_image_names,use_tflite=use_tf_lite)
             else:
                 dnn_gold_tensors.append(current_output)
 
