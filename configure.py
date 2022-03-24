@@ -59,7 +59,10 @@ def main():
                 default_file_name = f"{hostname}_config_{framework}_{dnn_model}_"
                 default_file_name += f"{dnn_type}_{dataset}_batch_size_{BATCH_SIZE}"
                 json_file_name = f"{jsons_path}/{default_file_name}.json"
-                gold_path = f"{current_directory}/data/{default_file_name}" + ".npy" if framework == "tensorflow" else ".pt"
+                file_ext = ".npy"
+                if framework == "pytorch":
+                    file_ext = ".pt"
+                gold_path = f"{current_directory}/data/{default_file_name}" + file_ext
 
                 script_name = f"{framework}_dnns.py"
                 dataset_img_list = f"{current_directory}/data/{dataset}_img_list.txt"
