@@ -135,19 +135,12 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                                    copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                                    equal_caller=equal)
         elif dnn_type == DNNType.DETECTION:
-            if use_tflite is False:
-                output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
+           
+            output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
                                                   current_image_names=current_image_names,
                                                   output_logger=output_logger,
                                                   copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
-                                                  equal_caller=equal)
-            else:              
-                for output_tensor_elem, gold_tensor_elem in zip(dnn_output_tensor,dnn_golden_tensor):
-                    for output_elem, gold_elem in zip(output_tensor_elem,gold_tensor_elem):
-                        #print(output_elem)
-                        #print(gold_elem)
-                        if output_elem != gold_elem:
-                            output_errors+=1
+                                                  equal_caller=equal,use_tflite=use_tflite)           
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
