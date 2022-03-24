@@ -123,9 +123,9 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
     score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
     if detection_keys is None:
         detection_keys = dict(boxes="boxes", scores="scores", labels="labels")
-    boxes_gold = dnn_golden_dict[detection_keys["boxes"]]
-    labels_gold = dnn_golden_dict[detection_keys["labels"]]
-    scores_gold = dnn_golden_dict[detection_keys["scores"]]
+    boxes_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["boxes"]])
+    labels_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["labels"]])
+    scores_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["scores"]])
     # Make sure that we are on the CPU
     boxes_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["boxes"]])
     labels_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["labels"]])
