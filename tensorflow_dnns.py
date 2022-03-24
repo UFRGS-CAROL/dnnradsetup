@@ -4,6 +4,7 @@
 Main file for Tensorflow DNNs setup
 """
 import os
+import pickle
 from typing import Union
 
 import keras
@@ -206,6 +207,16 @@ def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: 
         pass
 
 
+def pickle_save_file(file_path, data):
+    with open(file_path, 'wb') as handle:
+        pickle.dump(data, handle)
+
+
+def pickle_load_file(file_path):
+    with open(file_path, 'rb') as handle:
+        return pickle.load(handle)
+
+
 def main():
     # tensorflow.debugging.set_log_device_placement(True)
     is_in_eager_mode = tensorflow.executing_eagerly()
@@ -255,8 +266,9 @@ def main():
     # Load if it is not a gold generating op
     timer.tic()
     if generate is False:
-        with tensorflow.device("/CPU"):
-            dnn_gold_tensors = numpy.load(gold_path, allow_pickle=True)
+        # with tensorflow.device("/CPU"):
+        #     dnn_gold_tensors = numpy.load(gold_path, allow_pickle=True)
+        dnn_gold_tensors = pickle_load_file(file_path=gold_path)
 
     timer.toc()
     output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
@@ -334,13 +346,14 @@ def main():
     timer.tic()
     if generate:
         with tensorflow.device("/CPU"):
-            dnn_gold_tensors = numpy.array(dnn_gold_tensors)
-            numpy.save(gold_path, dnn_gold_tensors)
+            # dnn_gold_tensors = numpy.array(dnn_gold_tensors)
+            # numpy.save(gold_path, dnn_gold_tensors)
+            pickle_save_file(file_path=gold_path, data=dnn_gold_tensors)
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
-            output_logger.debug(f"Accuracy measure")
-            verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
-                                    ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
+            # output_logger.debug(f"Accuracy measure")
+            # verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
+            #                         ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
