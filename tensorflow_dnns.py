@@ -9,7 +9,7 @@ from typing import Union
 import keras
 import numpy
 import tensorflow
-from PIL.Image import BICUBIC, BILINEAR
+from PIL.Image import BICUBIC, BILINEAR, ANTIALIAS
 from keras.applications import efficientnet
 from keras.applications import inception_v3
 from keras.applications import resnet
@@ -135,12 +135,11 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                                    copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                                    equal_caller=equal)
         elif dnn_type == DNNType.DETECTION:
-           
             output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
-                                                  current_image_names=current_image_names,
-                                                  output_logger=output_logger,
-                                                  copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
-                                                  equal_caller=equal,use_tflite=use_tflite)           
+                                              current_image_names=current_image_names,
+                                              output_logger=output_logger,
+                                              copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
+                                              equal_caller=equal, use_tflite=use_tflite)
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
@@ -166,9 +165,8 @@ def load_dataset(interpolation: int,
             input_tensor = list()
             for img, filename in zip(images, image_list):
                 w, h = img.size
-
                 scale = min(dnn_input_size[0] / w, dnn_input_size[0] / h)
-                input_tensor.append({'data': img.resize(dnn_input_size, resample=interpolation),
+                input_tensor.append({'data': img.resize(dnn_input_size, resample=ANTIALIAS),
                                      'scale': scale})
 
     timer.toc()
@@ -223,17 +221,6 @@ def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: 
         verify_classification_accuracy(pred, ground_truth_csv)
 
 
-def check_output_against_golden(output, golden_file):    
-    if os.path.isfile(golden_file):
-        golden = np.load(golden_file)
-        if numpy.array_equal(golden,output):
-            return True
-        else:
-            return False
-        
-    else:
-        raise FileNotFoundError
-
 def main():
     # tensorflow.debugging.set_log_device_placement(True)
     is_in_eager_mode = tensorflow.executing_eagerly()
@@ -285,7 +272,7 @@ def main():
     timer.tic()
     if generate is False:
         with tensorflow.device("/CPU"):
-            dnn_gold_tensors = numpy.load(gold_path)
+            dnn_gold_tensors = numpy.load(gold_path, allow_pickle=True)
 
     timer.toc()
     output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
@@ -313,9 +300,8 @@ def main():
                     dnn_model.invoke()
                     if dnn_type == DNNType.CLASSIFICATION:
                         current_output = tensorflow_lite_utils.get_classification_scores(interpreter=dnn_model)
-                        check_tflite_accuracy.append(tensorflow_lite_utils.get_classes(interpreter=dnn_model))
                     elif dnn_type == DNNType.DETECTION:
-                        current_output = tensorflow_lite_utils.get_objects(interpreter=dnn_model, nparray=True)
+                        current_output = tensorflow_lite_utils.get_detection_raw_output_dict(interpreter=dnn_model)
                 else:
                     current_output = dnn_model(batched_input)
             dnn_log_helper.end_iteration()
@@ -331,9 +317,10 @@ def main():
                 errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
                                                   dnn_type=dnn_type, setup_iteration=setup_iteration,
                                                   batch_iteration=batch_iteration, output_logger=output_logger,
-                                                  current_image_names=current_image_names,use_tflite=use_tf_lite)
+                                                  current_image_names=current_image_names, use_tflite=use_tf_lite)
             else:
                 dnn_gold_tensors.append(current_output)
+                check_tflite_accuracy.append(tensorflow_lite_utils.get_classes(interpreter=dnn_model))
 
             total_errors += errors
             timer.toc()

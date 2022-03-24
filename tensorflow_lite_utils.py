@@ -380,11 +380,11 @@ class BBox(collections.namedtuple('BBox', ['xmin', 'ymin', 'xmax', 'ymax'])):
         return area / (a.area + b.area - area)
 
 
-class DetectionRawOutput(collections.namedtuple('DetectionRawOutput', ['boxes', 'class_ids', 'scores', 'count'])):
+class DetectionRawOutput(collections.namedtuple('DetectionRawOutput', ['boxes', 'labels', 'scores', 'count'])):
     """Represents the raw output tensors of the interpreter.
         .. py:attribute:: boxes
             Array containing raw values for all boxes that outcome from the detection
-        .. py:attribute:: class_ids
+        .. py:attribute:: labels
             Array containing raw values for all class ids that outcome from the detection
         .. py:attribute:: scores
             Array containing raw values for all scores that outcome from the detection
@@ -400,7 +400,7 @@ class DetectionRawOutput(collections.namedtuple('DetectionRawOutput', ['boxes', 
     def from_data(data):
         return DetectionRawOutput(
             boxes=data['boxes'],
-            class_ids=data['class_ids'],
+            class_ids=data['labels'],
             scores=data['scores'],
             count=data['count'])
 
@@ -433,22 +433,30 @@ class DetectionRawOutput(collections.namedtuple('DetectionRawOutput', ['boxes', 
 
         def make_object(i):
             if nparray:
-                return np.concatenate(([int(self.class_ids[i]), self.scores[i]], self.boxes[i]))
+                return np.concatenate(([int(self.labels[i]), self.scores[i]], self.boxes[i]))
             else:
                 ymin, xmin, ymax, xmax = self.boxes[i]
                 return Object(
-                    id=int(self.class_ids[i]),
+                    id=int(self.labels[i]),
                     score=self.scores[i],
                     bbox=BBox(xmin, ymin, xmax, ymax).scale(sx, sy).map(int))
 
         objs = [make_object(i) for i in range(count) if self.scores[i] >= threshold]
         return np.array(objs, dtype=np.float32) if nparray else objs
 
+    def get_all_objects(self, input_size, img_scale=(1., 1.)):
+        width, height = input_size
+        img_scale_x, img_scale_y = img_scale
+        all_objects = dict(
+            boxes=self.boxes
+        )
+
+
 
 def get_detection_raw_output(interpreter):
     return DetectionRawOutput(
         boxes=output_tensor(interpreter, 0)[0],
-        class_ids=output_tensor(interpreter, 1)[0],
+        labels=output_tensor(interpreter, 1)[0],
         scores=output_tensor(interpreter, 2)[0],
         count=int(output_tensor(interpreter, 3)[0]))
 
