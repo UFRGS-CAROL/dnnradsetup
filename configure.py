@@ -9,16 +9,17 @@ from common_tf_and_pt import DNNType
 from common_tf_and_pt import INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0
 from common_tf_and_pt import SSD_MOBILENET_V2, EFFICIENT_DET_LITE3, FASTER_RCNN_RESNET_FPN50
 
-FRAMEWORKS = {
-    "tensorflow": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0, SSD_MOBILENET_V2, EFFICIENT_DET_LITE3],
-    "pytorch": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0, FASTER_RCNN_RESNET_FPN50]
-}
-
 CONFIG_FILE = "/etc/radiation-benchmarks.conf"
 DISABLE_CONSOLE_LOGGING = False
 BATCH_SIZE = 1
 ITERATIONS = int(1e12)
 USE_TF_LITE = False
+DOWNLOAD_MODELS = False
+
+FRAMEWORKS = {
+    "tensorflow": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0, SSD_MOBILENET_V2, EFFICIENT_DET_LITE3],
+    "pytorch": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0, FASTER_RCNN_RESNET_FPN50]
+}
 
 DNN_MODELS = {
     INCEPTION_V3: dict(type=DNNType.CLASSIFICATION, support_tflite=True, dataset="imagenet2012"),
@@ -44,8 +45,10 @@ def main():
     jsons_path = f"data/{hostname}_jsons"
     if os.path.isdir(jsons_path) is False:
         os.mkdir(jsons_path)
-    print("Download all the models")
-    os.system("./download_models.py")
+
+    if DOWNLOAD_MODELS:
+        print("Download all the models")
+        os.system("./download_models.py")
     current_directory = os.getcwd()
     for dnn_model, config_vals in DNN_MODELS.items():
         for framework in FRAMEWORKS:
