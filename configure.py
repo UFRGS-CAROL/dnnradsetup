@@ -9,7 +9,11 @@ from common_tf_and_pt import DNNType
 from common_tf_and_pt import INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0
 from common_tf_and_pt import SSD_MOBILENET_V2, EFFICIENT_DET_LITE3, FASTER_RCNN_RESNET_FPN50
 
-FRAMEWORKS = ["tensorflow", "pytorch"]
+FRAMEWORKS = {
+    "tensorflow": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0,  SSD_MOBILENET_V2, EFFICIENT_DET_LITE3],
+    "pytorch": [INCEPTION_V3, RESNET_50, EFFICIENT_NET_B3, EFFICIENT_NET_B0, FASTER_RCNN_RESNET_FPN50]
+}
+
 CONFIG_FILE = "/etc/radiation-benchmarks.conf"
 DISABLE_CONSOLE_LOGGING = False
 BATCH_SIZE = 1
@@ -44,50 +48,51 @@ def main():
     current_directory = os.getcwd()
     for dnn_model, config_vals in DNN_MODELS.items():
         for framework in FRAMEWORKS:
-            for use_tf_lite in [False, True]:
-                if framework != "tensorflow" and use_tf_lite is True:
-                    continue
-                dnn_type = config_vals["type"]
-                dataset = config_vals["dataset"]
-                # Default filename will build the other names
-                default_file_name = f"{hostname}_config_{framework}_{dnn_model}_"
-                default_file_name += f"{dnn_type}_{dataset}_batch_size_{BATCH_SIZE}"
-                json_file_name = f"{jsons_path}/{default_file_name}.json"
-                gold_path = f"{current_directory}/data/{default_file_name}" + ".npy" if framework == "tensorflow" else ".pt"
+            if dnn_model in FRAMEWORKS[framework]:
+                for use_tf_lite in [False, True]:
+                    if framework != "tensorflow" and use_tf_lite is True:
+                        continue
+                    dnn_type = config_vals["type"]
+                    dataset = config_vals["dataset"]
+                    # Default filename will build the other names
+                    default_file_name = f"{hostname}_config_{framework}_{dnn_model}_"
+                    default_file_name += f"{dnn_type}_{dataset}_batch_size_{BATCH_SIZE}"
+                    json_file_name = f"{jsons_path}/{default_file_name}.json"
+                    gold_path = f"{current_directory}/data/{default_file_name}" + ".npy" if framework == "tensorflow" else ".pt"
 
-                script_name = f"{framework}_dnns.py"
-                dataset_img_list = f"{current_directory}/data/{dataset}_img_list.txt"
+                    script_name = f"{framework}_dnns.py"
+                    dataset_img_list = f"{current_directory}/data/{dataset}_img_list.txt"
 
-                parameters = [
-                    f"{current_directory}/{script_name} "
-                    f"--model {dnn_model}",
-                    f"--imglist {dataset_img_list}",
-                    "--precision fp32",
-                    f"--iterations {ITERATIONS}",
-                    f"--batchsize {BATCH_SIZE}",
-                    "--disableconsolelog",
-                    f"--goldpath {gold_path}",
-                    "--tflite",
-                ]
+                    parameters = [
+                        f"{current_directory}/{script_name} ",
+                        f"--model {dnn_model}",
+                        f"--imglist {dataset_img_list}",
+                        "--precision fp32",
+                        f"--iterations {ITERATIONS}",
+                        f"--batchsize {BATCH_SIZE}",
+                        "--disableconsolelog",
+                        f"--goldpath {gold_path}",
+                        "--tflite",
+                    ]
 
-                generate_parameters = parameters + ["--generate"]
-                generate_parameters.remove("--disableconsolelog")
-                generate_cmd = " ".join(generate_parameters)
+                    generate_parameters = parameters + ["--generate"]
+                    generate_parameters.remove("--disableconsolelog")
+                    generate_cmd = " ".join(generate_parameters)
 
-                exec_cmd = " ".join(parameters)
-                command_list = [{
-                    "killcmd": f"pkill -9 -f {script_name}",
-                    "exec": exec_cmd,
-                    "codename": script_name.replace(".py", ""),
-                    "header": [i.replace("--", "").replace(" ", "=") for i in parameters]
-                }]
-                # dump json
-                with open(json_file_name, "w") as json_fp:
-                    json.dump(obj=command_list, fp=json_fp, indent=4)
+                    exec_cmd = " ".join(parameters)
+                    command_list = [{
+                        "killcmd": f"pkill -9 -f {script_name}",
+                        "exec": exec_cmd,
+                        "codename": script_name.replace(".py", ""),
+                        "header": " ".join(parameters)
+                    }]
+                    # dump json
+                    with open(json_file_name, "w") as json_fp:
+                        json.dump(obj=command_list, fp=json_fp, indent=4)
 
-                print(f"Executing generate for {generate_cmd}")
-                if os.system(generate_cmd) != 0:
-                    raise OSError(f"Could not execute command {generate_cmd}")
+                    print(f"Executing generate for {generate_cmd}")
+                    if os.system(generate_cmd) != 0:
+                        raise OSError(f"Could not execute command {generate_cmd}")
 
     print("Json creation and golden generation finished")
     print(f"You may run: scp -r {jsons_path} carol@{server_ip}:"
