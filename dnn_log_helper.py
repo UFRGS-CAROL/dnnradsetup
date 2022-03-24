@@ -65,3 +65,8 @@ def set_max_errors_iter(max_errors):
 def set_max_infos_iter(max_infos):
     if NOT_GOLDEN_GENERATION:
         return log_helper.set_max_infos_iter(max_infos)
+
+
+def set_iter_interval_print(interval):
+    if NOT_GOLDEN_GENERATION:
+        return log_helper.set_iter_interval_print(interval)

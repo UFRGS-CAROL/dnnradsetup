@@ -221,7 +221,11 @@ def main():
     # tensorflow.debugging.set_log_device_placement(True)
     is_in_eager_mode = tensorflow.executing_eagerly()
     # Check the available device
-    device = "/GPU" if tensorflow.config.list_physical_devices('GPU') else "/CPU"
+    device = "/CPU"
+    if tensorflow.config.list_physical_devices('GPU'):
+        dnn_log_helper.set_iter_interval_print(30)
+        device = "/GPU"
+
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")

@@ -156,7 +156,10 @@ def verify_network_accuracy(batched_output: torch.tensor, dnn_type: DNNType, img
 
 def main():
     # Check the available device
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
+        dnn_log_helper.set_iter_interval_print(30)
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")
