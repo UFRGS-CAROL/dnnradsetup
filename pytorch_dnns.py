@@ -96,8 +96,9 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
                                                copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                                equal_caller=equal)
     elif dnn_type == DNNType.DETECTION:
-        output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
-                                          current_image_names=current_image_names,
+        # assert len(dnn_output_tensor) == 1 and len(dnn_golden_tensor) != 0
+        output_errors = compare_detection(dnn_output_dict=dnn_output_tensor[0], dnn_golden_dict=dnn_golden_tensor[0],
+                                          current_image=current_image_names,
                                           output_logger=output_logger, copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                           equal_caller=equal)
     dnn_log_helper.log_error_count(output_errors)
@@ -173,7 +174,7 @@ def main():
     batch_size = args.batchsize
 
     if disable_console_logger:
-        output_logger.level = logging.ERROR
+        output_logger.level = logging.FATAL
 
     # Set the parameters for the DNN
     model_parameters = DNN_MODELS[model_name]
@@ -254,7 +255,7 @@ def main():
             setup_iteration += 1
     if generate:
         timer.tic()
-        dnn_gold_tensors = torch.stack(dnn_gold_tensors).to("cpu")
+        # dnn_gold_tensors = torch.stack(dnn_gold_tensors).to("cpu")
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")

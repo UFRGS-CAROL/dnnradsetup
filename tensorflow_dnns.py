@@ -114,7 +114,7 @@ def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = Non
         return bool(
             tensorflow.reduce_all(tensorflow.less_equal(tensorflow.abs(tensorflow.subtract(rhs, lhs)), threshold)))
     else:
-        return bool(tensorflow.equal(rhs, lhs))
+        return bool(tensorflow.reduce_all(tensorflow.equal(rhs, lhs)))
 
 
 def copy_tensor_to_cpu(x_tensor):
@@ -135,11 +135,15 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                                    copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
                                                    equal_caller=equal)
         elif dnn_type == DNNType.DETECTION:
-            output_errors = compare_detection(dnn_output_tensor=dnn_output_tensor, dnn_golden_tensor=dnn_golden_tensor,
-                                              current_image_names=current_image_names,
+            detection_keys = None if use_tflite else dict(boxes="detection_boxes",
+                                                          scores="detection_scores",
+                                                          labels="detection_classes")
+
+            output_errors = compare_detection(dnn_output_dict=dnn_output_tensor, dnn_golden_dict=dnn_golden_tensor,
+                                              current_image=current_image_names,
                                               output_logger=output_logger,
                                               copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
-                                              equal_caller=equal, use_tflite=use_tflite)
+                                              equal_caller=equal, detection_keys=detection_keys)
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
@@ -155,45 +159,31 @@ def load_dataset(interpolation: int,
     assert batch_size <= len(image_list), "Batch size must be equal or smaller than img list"
     with tensorflow.device(device):
         if use_tflite is False and dnn_type == DNNType.CLASSIFICATION:
-            input_tensor = list()
-            for img in images:
-                new_img = img_to_array(img.resize(dnn_input_size, resample=interpolation), dtype=numpy.uint8)
-                input_tensor.append(tensorflow.expand_dims(new_img, axis=0))
+            input_tensor = [tensorflow.expand_dims(
+                img_to_array(img.resize(dnn_input_size, resample=interpolation), dtype=numpy.uint8), axis=0) for img in
+                images]
         elif use_tflite is False and dnn_type == DNNType.DETECTION:
             input_tensor = [tensorflow.expand_dims(img_to_array(img, dtype=numpy.uint8), axis=0) for img in images]
         else:
-            input_tensor = list()
-            for img, filename in zip(images, image_list):
-                w, h = img.size
-                scale = min(dnn_input_size[0] / w, dnn_input_size[0] / h)
-                input_tensor.append({'data': img.resize(dnn_input_size, resample=ANTIALIAS),
-                                     'scale': scale})
+            input_tensor = [img.resize(dnn_input_size, resample=ANTIALIAS) for img in images]
 
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor, image_list
 
 
-def load_model(precision: str, model_loader: callable, device: str, dnn_type: DNNType, model_name: str,
+def load_model(model_loader: callable, device: str, dnn_type: DNNType, model_name: str,
                use_tflite: bool) -> Union[keras.Model, tensorflow.lite.Interpreter]:
     with tensorflow.device(device):
         model_path = f"{os.path.dirname(os.path.realpath(__file__))}/data/tf_models/{model_name}"
         if use_tflite is False:
             if dnn_type == DNNType.CLASSIFICATION:
-                weights = 'imagenet'
-                dnn_model = model_loader(weights=weights)
+                dnn_model = model_loader(weights='imagenet')
             elif dnn_type == DNNType.DETECTION:
                 dnn_model = tensorflow.saved_model.load(model_path)
         else:
             dnn_model = tensorflow_lite_utils.create_interpreter(model_file=model_path + ".tflite")
             dnn_model.allocate_tensors()
-        # # It means that I want to convert the model into FP16, but make sure that it is not quantized
-        if precision == "fp16":
-            raise NotImplementedError("Not implemented for Tensorflow")
-        #     converter = tensorflow.lite.TFLiteConverter.from_keras_model(dnn_model)
-        #     converter.optimizations = [tensorflow.lite.Optimize.DEFAULT]
-        #     converter.target_spec.supported_types = [tensorflow.float16]
-        #     dnn_model = converter.convert()
     return dnn_model
 
 
@@ -213,12 +203,7 @@ def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: 
             pred = list()
             verify_detection_accuracy(pred, ground_truth_csv)
     else:
-        return
-        pred = list()
-        for img, x in zip(img_names, batched_output):
-            print(x[0])
-            pred.append({"img_name": img, "class_id_predicted": x[0].id - 1})
-        verify_classification_accuracy(pred, ground_truth_csv)
+        pass
 
 
 def main():
@@ -237,22 +222,21 @@ def main():
     iterations = args.iterations
     image_list_path = args.imglist
     gold_path = args.goldpath
-    precision = args.precision
     model_name = args.model
     disable_console_logger = args.disableconsolelog
     batch_size = args.batchsize
     use_tf_lite = args.tflite
 
     if disable_console_logger:
-        output_logger.level = logging.ERROR
+        output_logger.level = logging.FATAL
 
     # Set the parameters for the DNN
     model_parameters = DNN_MODELS[model_name]
     input_size = OPTIMAL_INPUT_SIZE[model_name]
     interpolation = model_parameters["interpolation"]
     dnn_type = model_parameters["type"]
-    dnn_model = load_model(precision=precision, model_loader=model_parameters["model"],
-                           device=device, dnn_type=dnn_type, model_name=model_name, use_tflite=use_tf_lite)
+    dnn_model = load_model(model_loader=model_parameters["model"], device=device, dnn_type=dnn_type,
+                           model_name=model_name, use_tflite=use_tf_lite)
 
     timer.toc()
     output_logger.debug(f"Time necessary to load the model and config it: {timer}")
@@ -284,7 +268,14 @@ def main():
 
     # Main setup loop
     setup_iteration = 0
-    check_tflite_accuracy = list()
+    # Avoid doing multiple comparisons
+    if dnn_type == DNNType.CLASSIFICATION:
+        output_parser = tensorflow_lite_utils.get_classification_scores
+    elif dnn_type == DNNType.DETECTION:
+        output_parser = tensorflow_lite_utils.get_all_objects
+    else:
+        raise ValueError("Incorrect DNN type")
+
     while setup_iteration < iterations:
         total_errors = 0
         # Loop over the input list
@@ -295,17 +286,12 @@ def main():
             dnn_log_helper.start_iteration()
             with tensorflow.device(device):
                 if use_tf_lite:
-                    image = batched_input['data']
-                    tensorflow_lite_utils.set_input(interpreter=dnn_model, data=image)
+                    tensorflow_lite_utils.set_input(interpreter=dnn_model, data=batched_input)
                     dnn_model.invoke()
-                    if dnn_type == DNNType.CLASSIFICATION:
-                        current_output = tensorflow_lite_utils.get_classification_scores(interpreter=dnn_model)
-                    elif dnn_type == DNNType.DETECTION:
-                        current_output = tensorflow_lite_utils.get_detection_raw_output_dict(interpreter=dnn_model)
+                    current_output = output_parser(interpreter=dnn_model)
                 else:
                     current_output = dnn_model(batched_input)
             dnn_log_helper.end_iteration()
-            # show_classification_result(output=current_output, batch_size=batch_size, image_list=current_image_names)
 
             timer.toc()
             kernel_time = timer.diff_time
@@ -320,7 +306,6 @@ def main():
                                                   current_image_names=current_image_names, use_tflite=use_tf_lite)
             else:
                 dnn_gold_tensors.append(current_output)
-                check_tflite_accuracy.append(tensorflow_lite_utils.get_classes(interpreter=dnn_model))
 
             total_errors += errors
             timer.toc()
@@ -335,8 +320,8 @@ def main():
         if total_errors != 0:
             del input_list
             del dnn_model
-            dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device,
-                                   dnn_type=dnn_type, model_name=model_name, use_tflite=use_tf_lite)
+            dnn_model = load_model(model_loader=model_parameters["model"], device=device, dnn_type=dnn_type,
+                                   model_name=model_name, use_tflite=use_tf_lite)
             if use_tf_lite:
                 dnn_model, input_details, output_details = dnn_model
 
@@ -354,12 +339,8 @@ def main():
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
             output_logger.debug(f"Accuracy measure")
-            if check_tflite_accuracy:
-                verify_network_accuracy(batched_output=check_tflite_accuracy, dnn_type=dnn_type, img_names=image_names,
-                                        ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
-            else:
-                verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
-                                        ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
+            verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
+                                    ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
