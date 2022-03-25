@@ -3,6 +3,7 @@
 """
 Main file for Tensorflow DNNs setup
 """
+import logging
 import os
 import pickle
 from typing import Union
@@ -15,8 +16,9 @@ from keras.applications import efficientnet
 from keras.applications import inception_v3
 from keras.applications import resnet
 from keras.preprocessing.image import img_to_array
-from time import sleep
+
 import console_logger
+import dnn_log_helper
 import tensorflow_lite_utils
 from common_tf_and_pt import *
 
@@ -104,67 +106,65 @@ DNN_MODELS = {
     # RETINA_NET_RESNET_FPN50: NotImplementedError
 }
 
+
 def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_image: str, output_logger: logging.Logger,
-                      copy_tensor_to_cpu_caller: callable, detection_keys: dict = None,  use_tflite: bool = False) -> int:
+                      # copy_tensor_to_cpu_caller: callable, detection_keys: dict = None,
+                      use_tflite: bool = False) -> int:
     """ Compare the detections and return the number of errors. Also log on the logfile  """
     # We use for detection batch always equal to one
     score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
-    if detection_keys is None:
-        detection_keys = dict(boxes="boxes", scores="scores", labels="labels")
+    # if detection_keys is None:
+    #     detection_keys = dict(boxes="boxes", scores="scores", labels="labels")
     if use_tflite:
-        boxes_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["boxes"]])
-        labels_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["labels"]])
-        scores_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["scores"]])
-        # Make sure that we are on the CPU
-        boxes_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["boxes"]])
-        labels_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["labels"]])
-        scores_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["scores"]])
-        if(random.randint(0,4)==0):
-            scores_out[0] = 1
-        if(random.randint(0,4)==0):
-            boxes_out[0][0] = 2 
-        if(random.randint(0,4)==0):
-            labels_out[0] = 3
-            
+        boxes_gold = dnn_golden_dict["boxes"]
+        labels_gold = dnn_golden_dict["labels"]
+        scores_gold = dnn_golden_dict["scores"]
+        boxes_out = dnn_output_dict["boxes"]
+        labels_out = dnn_output_dict["labels"]
+        scores_out = dnn_output_dict["scores"]
+        # if (random.randint(0, 4) == 0):
+        #     scores_out[0] = 1
+        # if (random.randint(0, 4) == 0):
+        #     boxes_out[0][0] = 2
+        # if (random.randint(0, 4) == 0):
+        #     labels_out[0] = 3
     else:
-        boxes_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["boxes"]])[0]
-        labels_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["labels"]])[0]
-        scores_gold = copy_tensor_to_cpu_caller(dnn_golden_dict[detection_keys["scores"]])[0]
-        # Make sure that we are on the CPU
-        boxes_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["boxes"]])[0]
-        labels_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["labels"]])[0]
-        scores_out = copy_tensor_to_cpu_caller(dnn_output_dict[detection_keys["scores"]])[0]
-        if random.randint(0,4)==0:
-            temp =scores_out.numpy()
-            temp[0]+=1
-            scores_out=tf.convert_to_tensor(temp,dtype=tf.float32)
-        if random.randint(0,4)==0:
-            temp =boxes_out.numpy()
-            temp[random.randrange(0,len(temp))] += 2
-            boxes_out=tf.convert_to_tensor(temp,dtype=tf.float32)
-            
-        if random.randint(0,4)==0:
-            temp =labels_out.numpy()
-            temp[random.randrange(0,len(temp))] += 2
-            labels_out=tf.convert_to_tensor(temp,dtype=tf.float32)
+        boxes_gold = dnn_golden_dict["detection_boxes"][0]
+        labels_gold = dnn_golden_dict["detection_labels"][0]
+        scores_gold = dnn_golden_dict["detection_scores"][0]
+        boxes_out = dnn_output_dict["detection_boxes"][0]
+        labels_out = dnn_output_dict["detection_labels"][0]
+        scores_out = dnn_output_dict["detection_scores"][0]
+        # if random.randint(0, 4) == 0:
+        #     temp = scores_out.numpy()
+        #     temp[0] += 1
+        #     scores_out = tf.convert_to_tensor(temp, dtype=tf.float32)
+        # if random.randint(0, 4) == 0:
+        #     temp = boxes_out.numpy()
+        #     temp[random.randrange(0, len(temp))] += 2
+        #     boxes_out = tf.convert_to_tensor(temp, dtype=tf.float32)
+        #
+        # if random.randint(0, 4) == 0:
+        #     temp = labels_out.numpy()
+        #     temp[random.randrange(0, len(temp))] += 2
+        #     labels_out = tf.convert_to_tensor(temp, dtype=tf.float32)
 
         # # Debug 
-    #print(boxes_out)
-    #print(labels_out)
-    #print(scores_out)
-    
+    # print(boxes_out)
+    # print(labels_out)
+    # print(scores_out)
 
-    #print(scores_out)
-    #if(random.randint(0,4)==0):
+    # print(scores_out)
+    # if(random.randint(0,4)==0):
     #    scores_out[0] = 1
     #    boxes_out[0][0] = 2 
     #    labels_out[0] = 3
-    #It is better compare to a threshold
+    # It is better compare to a threshold
 
     # Logging the score indexes that in fact have errors
-    if all([equal_caller(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
-            equal_caller(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
-            equal_caller(labels_gold, labels_out)]) is False:
+    if all([equal(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
+            equal(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
+            equal(labels_gold, labels_out)]) is False:
         for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
             if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
                 score_error = f"img:{current_image} scorei:{s_i} g:{score_gold:.6e} o:{score_out:.6e}"
@@ -192,25 +192,25 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
 
     return score_errors_count + box_errors_count + labels_errors_count
 
-def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration: int,
-                           batch_iteration: int, current_image_names: list, output_logger: logging.Logger,
-                           copy_tensor_to_cpu_caller: callable, use_tflite: bool) -> int:
+
+def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration: int, current_image: str,
+                           output_logger: logging.Logger, use_tflite: bool) -> int:
     # Make sure that they are on CPU
     if use_tflite:
-        dnn_output_tensor_cpu = copy_tensor_to_cpu_caller(dnn_output_tensor)
+        dnn_output_tensor_cpu = dnn_output_tensor
         # # Debug injection
-       
-        #if random.randint(0,4)==0:
+
+        # if random.randint(0,4)==0:
         #    dnn_output_tensor_cpu[0] = 34.2
     else:
-        dnn_golden_tensor=dnn_golden_tensor[0]
-        dnn_output_tensor_cpu = copy_tensor_to_cpu_caller(dnn_output_tensor)[0]
-        #if random.randint(0,4)==0:
+        dnn_golden_tensor = dnn_golden_tensor[0]
+        dnn_output_tensor_cpu = dnn_output_tensor[0]
+        # if random.randint(0,4)==0:
         #    temp=dnn_output_tensor_cpu.numpy()
         #    temp[0] = 34.2
         #    dnn_output_tensor_cpu=tf.convert_to_tensor(temp,dtype=tf.float32)
-    #print(dnn_output_tensor_cpu)        
-   
+    # print(dnn_output_tensor_cpu)
+
     output_errors = 0
     # using the same approach as the detection, compare only the positions that differ
     if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
@@ -219,18 +219,17 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
             error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
             output_logger.error(error_detail)
             dnn_log_helper.log_error_detail(error_detail)
-        
-        #for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
+
+        # for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
         #                                                                  dnn_output_tensor_cpu):
-        for img_name_i, gold, found in zip(current_image_names,dnn_golden_tensor, dnn_output_tensor_cpu):
+        for gold, found in zip(dnn_golden_tensor, dnn_output_tensor_cpu):
             if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
                 print(print(gold))
                 output_errors += 1
-                error_detail = f"img:{img_name_i} setupit:{setup_iteration} "
-                error_detail += f"batchti:{batch_iteration} g:{gold:.6e} o:{found:.6e}"
+                error_detail = f"img:{current_image} setupit:{setup_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
                 output_logger.error(error_detail)
                 dnn_log_helper.log_error_detail(error_detail)
-        #else:
+        # else:
         #    for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
         #                                                                  dnn_output_tensor_cpu):
         #        for i, (gold, found) in enumerate(zip(current_gold_tensor, current_output_tensor)):
@@ -243,11 +242,6 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
     return output_errors
 
 
-def is_not_close(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float) -> tensorflow.Tensor:
-    """ Function to be equivalent to PyTorch """
-    return tensorflow.greater(tensorflow.abs(tensorflow.subtract(rhs, lhs)), threshold)
-
-
 def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = None) -> bool:
     if threshold:
         return bool(
@@ -256,49 +250,32 @@ def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = Non
         return bool(tensorflow.reduce_all(tensorflow.equal(rhs, lhs)))
 
 
-def copy_tensor_to_cpu(x_tensor):
-    return x_tensor
-
-
 def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor,
-                             dnn_type: DNNType, setup_iteration: int, batch_iteration: int, current_image_names: list,
-                             output_logger: logging.Logger, use_tflite: bool) -> int:
+                             dnn_type: DNNType, setup_iteration: int, current_image: str, output_logger: logging.Logger,
+                             use_tflite: bool) -> int:
     output_errors = 0
     # Make sure that they are on CPU
     with tensorflow.device('/CPU'):
         if dnn_type == DNNType.CLASSIFICATION:
             output_errors = compare_classification(dnn_output_tensor=dnn_output_tensor,
                                                    dnn_golden_tensor=dnn_golden_tensor,
-                                                   setup_iteration=setup_iteration, batch_iteration=batch_iteration,
-                                                   current_image_names=current_image_names, output_logger=output_logger,
-                                                   copy_tensor_to_cpu_caller=copy_tensor_to_cpu, use_tflite=use_tflite
-                                                   )
+                                                   setup_iteration=setup_iteration, current_image=current_image,
+                                                   output_logger=output_logger, use_tflite=use_tflite)
         elif dnn_type == DNNType.DETECTION:
-            if use_tflite:
-                detection_keys = None              
-            else:
-                detection_keys=dict(boxes="detection_boxes",
-                  scores="detection_scores",
-                  labels="detection_classes")
-            
             output_errors = compare_detection(dnn_output_dict=dnn_output_tensor, dnn_golden_dict=dnn_golden_tensor,
-                                          current_image=current_image_names,
-                                          output_logger=output_logger,
-                                          copy_tensor_to_cpu_caller=copy_tensor_to_cpu,
-                                           detection_keys=detection_keys, use_tflite=use_tflite)
+                                              current_image=current_image, output_logger=output_logger,
+                                              use_tflite=use_tflite)
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
 
 
-def load_dataset(interpolation: int,
-                 image_list_path: str, logger: logging.Logger,
-                 batch_size: int, device: str, dnn_type: DNNType,
+def load_dataset(interpolation: int, image_list_path: str, logger: logging.Logger, device: str, dnn_type: DNNType,
                  dnn_input_size: tuple, use_tflite: bool) -> Tuple[Union[tensorflow.Tensor, list], list]:
     timer = Timer()
     timer.tic()
     images, image_list = load_image_list(image_list_path)
     image_list = list(map(os.path.basename, image_list))
-    assert batch_size <= len(image_list), "Batch size must be equal or smaller than img list"
+    # assert batch_size <= len(image_list), "Batch size must be equal or smaller than img list"
     with tensorflow.device(device):
         if use_tflite is False and dnn_type == DNNType.CLASSIFICATION:
             input_tensor = [tensorflow.expand_dims(
@@ -380,7 +357,7 @@ def main():
     gold_path = args.goldpath
     model_name = args.model
     disable_console_logger = args.disableconsolelog
-    batch_size = args.batchsize
+    # batch_size = args.batchsize
     use_tf_lite = args.tflite
 
     if disable_console_logger:
@@ -401,7 +378,7 @@ def main():
     timer.tic()
 
     input_list, image_names = load_dataset(image_list_path=image_list_path, logger=output_logger,
-                                           batch_size=batch_size, device=device, dnn_type=dnn_type,
+                                           device=device, dnn_type=dnn_type,
                                            dnn_input_size=input_size, interpolation=interpolation,
                                            use_tflite=use_tf_lite)
     timer.toc()
@@ -436,9 +413,9 @@ def main():
     while setup_iteration < iterations:
         total_errors = 0
         # Loop over the input list
-        for batch_i, batched_input in enumerate(input_list):
-            batch_iteration = batch_i * batch_size
-            current_image_names = image_names[batch_iteration:batch_iteration + batch_size]
+        for img_i, batched_input in enumerate(input_list):
+            # batch_iteration = batch_i * batch_size
+            # current_image_names = image_names[batch_iteration:batch_iteration + batch_size]
             timer.tic()
             dnn_log_helper.start_iteration()
             with tensorflow.device(device):
@@ -456,11 +433,11 @@ def main():
             timer.tic()
             errors = 0
             if generate is False:
-                current_gold = dnn_gold_tensors[batch_i]
+                current_gold = dnn_gold_tensors[img_i]
                 errors = compare_output_with_gold(dnn_output_tensor=current_output, dnn_golden_tensor=current_gold,
                                                   dnn_type=dnn_type, setup_iteration=setup_iteration,
-                                                  batch_iteration=batch_iteration, output_logger=output_logger,
-                                                  current_image_names=current_image_names, use_tflite=use_tf_lite)
+                                                  output_logger=output_logger, current_image=image_names[img_i],
+                                                  use_tflite=use_tf_lite)
             else:
                 dnn_gold_tensors.append(current_output)
 
@@ -468,8 +445,7 @@ def main():
             timer.toc()
             comparison_time = timer.diff_time
 
-            iteration_out = f"It:{setup_iteration:<3} imgit:{batch_i:<3}"
-            iteration_out += f" {batch_size:<2} batches inference time:{kernel_time:.5f}"
+            iteration_out = f"It:{setup_iteration:<3} imgit:{img_i:<3} inference time:{kernel_time:.5f}"
             time_pct = (comparison_time / (comparison_time + kernel_time)) * 100.0
             iteration_out += f", gold compare time:{comparison_time:.5f} ({time_pct:.1f}%) errors:{errors}"
             output_logger.debug(iteration_out)
@@ -482,8 +458,7 @@ def main():
             if use_tf_lite:
                 dnn_model, input_details, output_details = dnn_model
 
-            input_list, image_names = load_dataset(image_list_path=image_list_path,
-                                                   logger=output_logger, batch_size=batch_size, device=device,
+            input_list, image_names = load_dataset(image_list_path=image_list_path, logger=output_logger, device=device,
                                                    dnn_type=dnn_type, dnn_input_size=input_size,
                                                    interpolation=interpolation, use_tflite=use_tf_lite)
 
@@ -496,9 +471,9 @@ def main():
             pickle_save_file(file_path=gold_path, data=dnn_gold_tensors)
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
-            # output_logger.debug(f"Accuracy measure")
-            # verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
-            #                         ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
+            output_logger.debug(f"Accuracy measure")
+            verify_network_accuracy(batched_output=dnn_gold_tensors, dnn_type=dnn_type, img_names=image_names,
+                                    ground_truth_csv=args.grtruthcsv, use_tflite=use_tf_lite)
 
     # finish the logfile
     dnn_log_helper.end_log_file()
