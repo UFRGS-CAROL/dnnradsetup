@@ -77,7 +77,7 @@ def equal(rhs: torch.Tensor, lhs: torch.Tensor, threshold: float = None) -> bool
         return bool(torch.equal(rhs, lhs))
 
 
-def compare_detection(dnn_output_dict: Dict[torch.tensor], dnn_golden_dict: Dict[torch.tensor], current_image: str,
+def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_image: str,
                       output_logger: logging.Logger) -> int:
     """ Compare the detections and return the number of errors. Also log on the logfile  """
     # We use for detection batch always equal to one
