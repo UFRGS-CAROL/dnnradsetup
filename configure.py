@@ -3,6 +3,7 @@
 import configparser
 import json
 import os.path
+import subprocess
 from socket import gethostname
 
 from common_tf_and_pt import DNNType
@@ -104,6 +105,8 @@ def main():
     print(f"You may run: scp -r {jsons_path} carol@{server_ip}:"
           f"/home/carol/radiation-setup/radiation-setup/machines_cfgs/")
 
+def test_all_jsons(timeout=10):
+    process = subprocess.Popen(['timeout', str(timeout), 'tail', '-f', '/var/log/syslog'], stdout=subprocess.PIPE)
 
 if __name__ == "__main__":
     main()

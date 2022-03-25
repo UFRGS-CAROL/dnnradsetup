@@ -315,8 +315,10 @@ def main():
         # make sure everything is on host
         for tensor_d in dnn_gold_tensors:
             if type(tensor_d) is dict:
-                [tensor_d[place].to("cpu") for place in ["boxes", "scores", "labels"]]
-            else:
+                for place in ["boxes", "scores", "labels"]:
+                    for ttd in tensor_d[place]:
+                        ttd.to("cpu")
+            if type(tensor_d) is torch.Tensor:
                 tensor_d.to("cpu")
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
