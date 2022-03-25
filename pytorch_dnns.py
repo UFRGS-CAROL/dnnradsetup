@@ -181,7 +181,7 @@ def load_dataset(transforms: torchvision.transforms, image_list_path: str,
         input_tensor = torch.unsqueeze(torch.stack(input_tensor), dim=1).to(device)
         # input_tensor = torch.split(input_tensor, 1)
     elif dnn_type == DNNType.DETECTION:
-        input_tensor = [transforms(im_to).to(device) for im_to in images]
+        input_tensor = [torch.unsqueeze(transforms(im_to), dim=0).to(device) for im_to in images]
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor, image_list
