@@ -5,7 +5,7 @@ Main file for Pytorch DNNs setup
 """
 import logging
 import os
-from typing import Union, Dict
+from typing import Union
 
 import torch
 import torchvision
