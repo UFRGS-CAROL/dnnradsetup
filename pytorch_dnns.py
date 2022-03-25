@@ -177,8 +177,8 @@ def load_dataset(transforms: torchvision.transforms, image_list_path: str,
     # THIS IS Necessary as Classification models expect a tensor, and detection expect a list of tensors
     input_tensor = list()
     if dnn_type == DNNType.CLASSIFICATION:
-        input_tensor = torch.stack([transforms(image) for image in images])
-        input_tensor = torch.split(input_tensor, 1).to(device)
+        input_tensor = torch.stack([transforms(image) for image in images]).to(device)
+        input_tensor = torch.split(input_tensor, 1)
     elif dnn_type == DNNType.DETECTION:
         input_tensor = [transforms(im_to).to(device) for im_to in images]
     timer.toc()
