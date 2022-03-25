@@ -168,23 +168,17 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
 
 
 def load_dataset(transforms: torchvision.transforms, image_list_path: str,
-                 logger: logging.Logger, device: str) -> Tuple[Union[torch.tensor, list], list]:
+                 logger: logging.Logger, device: str, dnn_type: DNNType) -> Tuple[Union[torch.tensor, list], list]:
     timer = Timer()
     timer.tic()
     images, image_list = load_image_list(image_list_path)
     # Remove the base path
     image_list = list(map(os.path.basename, image_list))
     # THIS IS Necessary as Classification models expect a tensor, and detection expect a list of tensors
-    # input_tensor = list()
-    # if dnn_type == DNNType.CLASSIFICATION:
-    #     resized_images = list()
-    #     for image in images:
-    #         resized_images.append(transforms(image))
-    #     input_tensor = torch.stack(resized_images).to(device)
-    # elif dnn_type == DNNType.DETECTION:
-    #     for img_to in images:
-    #         input_tensor.append(transforms(img_to).to(device))
     input_tensor = [transforms(img_to).to(device) for img_to in images]
+    if dnn_type == DNNType.CLASSIFICATION:
+        input_tensor = torch.stack(input_tensor).to(device)
+
     timer.toc()
     logger.debug(f"Input images loaded and resized successfully: {timer}")
     return input_tensor, image_list
@@ -251,7 +245,7 @@ def main():
     # First step is to load the inputs in the memory
     timer.tic()
     input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path, logger=output_logger,
-                                           device=device)
+                                           device=device, dnn_type=dnn_type)
     timer.toc()
     output_logger.debug(f"Time necessary to load the inputs: {timer}")
 
@@ -309,7 +303,7 @@ def main():
                 del dnn_model
                 dnn_model = load_model(precision=precision, model_loader=model_parameters["model"], device=device)
                 input_list, image_names = load_dataset(transforms=transform, image_list_path=image_list_path,
-                                                       logger=output_logger, device=device)
+                                                       logger=output_logger, device=device, dnn_type=dnn_type)
 
             setup_iteration += 1
     if generate:
