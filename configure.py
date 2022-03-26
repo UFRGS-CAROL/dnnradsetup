@@ -4,7 +4,7 @@ import configparser
 import glob
 import json
 import os.path
-import subprocess
+import time
 from socket import gethostname
 
 from common_tf_and_pt import DNNType
@@ -118,7 +118,9 @@ def test_all_jsons(timeout=30):
             json_data = json.load(fp)
 
         for v in json_data:
-            subprocess.run("python3 " + v['exec'], timeout=timeout, shell=True)
+            os.system(v['exec'] + "&")
+            time.sleep(timeout)
+            os.system(v["killcmd"])
 
 
 if __name__ == "__main__":
