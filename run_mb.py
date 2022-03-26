@@ -143,7 +143,7 @@ def main():
                  output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
             else:
                 raise Exception("invalid kernel_type")
-        golden_file = "gold_"+operation+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
+        golden_file = "gold_"+operation+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])+"_"+str(kernel_size[0])+"_"+str(kernel_size[1])
         save_output_golden(output, golden_file,output_logger)
         exit(0)
 
