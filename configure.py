@@ -34,7 +34,7 @@ DNN_MODELS = {
     FASTER_RCNN_RESNET_FPN50: dict(type=DNNType.DETECTION, support_tflite=False, dataset="coco2017"),
 }
 
-TEST_JSONS = False
+TEST_JSONS = True
 
 
 def main():
@@ -109,7 +109,7 @@ def main():
           f"/home/carol/radiation-setup/radiation-setup/machines_cfgs/")
 
 
-def test_all_jsons(timeout=10):
+def test_all_jsons(timeout=30):
     hostname = gethostname()
     jsons_path = f"data/{hostname}_jsons"
 
@@ -118,10 +118,7 @@ def test_all_jsons(timeout=10):
             json_data = json.load(fp)
 
         for v in json_data:
-            process = subprocess.Popen(['timeout', str(timeout), v['exec']], stdout=subprocess.PIPE)
-            out, err = process.communicate()
-            if err:
-                raise ValueError(f"Problem when testing {file}, check this benchmark")
+            subprocess.run(v['exec'], timeout=timeout)
 
 
 if __name__ == "__main__":
