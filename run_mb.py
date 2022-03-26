@@ -24,7 +24,7 @@ def set_input_n_op_n_gold(input_image,gold_file):
     golden = np.load(gold_file)
     return input, golden
 
-def save_output_golden(output, model_file):
+def save_output_golden(output, model_file,output_logger):
     np.save(model_file, output)
     output_logger.debug(f"Golden output saved to `{model_file}`")
 
@@ -46,7 +46,7 @@ def check_output_against_golden(output, golden,output_logger):
     return errors
 
 
-def generate_random_input(input_size,op):
+def generate_random_input(input_size,op,output_logger):
 
     rand_input = np.random.random(input_size)
     input_file = "input_"+op+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
@@ -105,7 +105,7 @@ def main():
             input_size = np.append(input_size, 1)
         else:
             raise Exception("invalid op")    
-        input_name,input=generate_random_input(input_size,operation)
+        input_name,input=generate_random_input(input_size,operation,output_logger)
 
     else:
         input,golden = set_input_n_op_n_gold(input_image_file,golden_file)
@@ -132,8 +132,8 @@ def main():
                  output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
             else:
                 raise Exception("invalid kernel_type")
-        golden_file = "gold_"+op+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
-        save_output_golden(output, golden_file)
+        golden_file = "gold_"+operation+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
+        save_output_golden(output, golden_file,output_logger)
         exit(0)
 
 
