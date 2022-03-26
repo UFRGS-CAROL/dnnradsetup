@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import configparser
+import glob
 import json
 import os.path
 import subprocess
@@ -32,6 +33,8 @@ DNN_MODELS = {
     EFFICIENT_DET_LITE3: dict(type=DNNType.DETECTION, support_tflite=True, dataset="coco2017"),
     FASTER_RCNN_RESNET_FPN50: dict(type=DNNType.DETECTION, support_tflite=False, dataset="coco2017"),
 }
+
+TEST_JSONS = False
 
 
 def main():
@@ -105,8 +108,24 @@ def main():
     print(f"You may run: scp -r {jsons_path} carol@{server_ip}:"
           f"/home/carol/radiation-setup/radiation-setup/machines_cfgs/")
 
+
 def test_all_jsons(timeout=10):
-    process = subprocess.Popen(['timeout', str(timeout), 'tail', '-f', '/var/log/syslog'], stdout=subprocess.PIPE)
+    hostname = gethostname()
+    jsons_path = f"data/{hostname}_jsons"
+
+    for file in glob.glob(rf"{jsons_path}/*.json", recursive=True):
+        with open(file, "r") as fp:
+            json_data = json.load(fp)
+
+        for k, v in json_data.items():
+            process = subprocess.Popen(['timeout', str(timeout), v['exec']], stdout=subprocess.PIPE)
+            out, err = process.communicate()
+            if err:
+                raise  ValueError(f"Problem when testing {file}, check this benchmark")
+
 
 if __name__ == "__main__":
-    main()
+    if TEST_JSONS:
+        test_all_jsons()
+    else:
+        main()
