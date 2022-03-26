@@ -257,7 +257,7 @@ def main():
     # Load if it is not a gold generating op
     if generate is False:
         timer.tic()
-        dnn_gold_tensors = torch.load(gold_path)
+        dnn_gold_tensors = torch.load(gold_path, map_location="cpu")
         timer.toc()
         output_logger.debug(f"Time necessary to load the golden outputs: {timer}")
 
@@ -312,16 +312,6 @@ def main():
             setup_iteration += 1
     if generate:
         timer.tic()
-        # dnn_gold_tensors = torch.stack(dnn_gold_tensors).to("cpu")
-        # make sure everything is on host
-        for tensor_d in dnn_gold_tensors:
-            if type(tensor_d) is list:
-                for p in tensor_d:
-                    for place in ["boxes", "scores", "labels"]:
-                        for ttd in p[place]:
-                            ttd.to("cpu")
-            if type(tensor_d) is torch.Tensor:
-                tensor_d.to("cpu")
         torch.save(dnn_gold_tensors, gold_path)
         timer.toc()
         output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
