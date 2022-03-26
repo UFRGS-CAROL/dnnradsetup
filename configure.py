@@ -34,7 +34,7 @@ DNN_MODELS = {
     FASTER_RCNN_RESNET_FPN50: dict(type=DNNType.DETECTION, support_tflite=False, dataset="coco2017"),
 }
 
-TEST_JSONS = True
+TEST_JSONS = False
 
 
 def main():
