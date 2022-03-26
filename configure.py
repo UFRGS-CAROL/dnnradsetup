@@ -121,7 +121,7 @@ def test_all_jsons(timeout=10):
             process = subprocess.Popen(['timeout', str(timeout), v['exec']], stdout=subprocess.PIPE)
             out, err = process.communicate()
             if err:
-                raise  ValueError(f"Problem when testing {file}, check this benchmark")
+                raise ValueError(f"Problem when testing {file}, check this benchmark")
 
 
 if __name__ == "__main__":
