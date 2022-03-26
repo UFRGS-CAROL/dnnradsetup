@@ -9,7 +9,7 @@ from time import time
 from PIL import Image
 from tensorflow.keras.layers import Conv2D, DepthwiseConv2D
 import dnn_log_helper as lh
-from tensorflow import convert_to_tensor, float32,equal,reduce_all,less_equal,subtract, Tensor
+from tensorflow import convert_to_tensor, float32,equal,reduce_all,less_equal,subtract, Tensor, device
 from tensorflow.keras.initializers import Constant
 import logging
 import console_logger
@@ -129,46 +129,48 @@ def main():
     #input_shape=input.shape
     #print(input_shape)
     if generate:
-        if operation == "Conv2D":
-            if kernel_type == "ONES":
-                output = Conv2D(1, kernel_size, kernel_initializer="Ones")(input)
-            elif kernel_type == "AVG":
-                output = Conv2D(1, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
-            else:
-                raise Exception("invalid kernel_type")
-        elif operation == "DepthwiseConv2D":
-            if kernel_type == "ONES":
-                output=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
-            elif kernel_type == "AVG":
-                 output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
-            else:
-                raise Exception("invalid kernel_type")
-        golden_file = "gold_"+operation+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])+"_"+str(kernel_size[0])+"_"+str(kernel_size[1])
-        save_output_golden(output, golden_file,output_logger)
-        exit(0)
+        with device('/cpu:0'):
+            if operation == "Conv2D":
+                if kernel_type == "ONES":
+                    output = Conv2D(1, kernel_size, kernel_initializer="Ones")(input)
+                elif kernel_type == "AVG":
+                    output = Conv2D(1, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
+                else:
+                    raise Exception("invalid kernel_type")
+            elif operation == "DepthwiseConv2D":
+                if kernel_type == "ONES":
+                    output=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
+                elif kernel_type == "AVG":
+                     output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
+                else:
+                    raise Exception("invalid kernel_type")
+            golden_file = "gold_"+operation+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])+"_"+str(kernel_size[0])+"_"+str(kernel_size[1])
+            save_output_golden(output, golden_file,output_logger)
+            exit(0)
 
 
     for i in range(iterations):        
         t2 = time()        
         lh.start_iteration()
-        if operation == "Conv2D":
-            if kernel_type == "ONES":
-                output = Conv2D(1, kernel_size, kernel_initializer="Ones")(input)
-            elif kernel_type == "AVG":
-                output = Conv2D(1, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
+        with device('/cpu:0'):
+            if operation == "Conv2D":
+                if kernel_type == "ONES":
+                    output = Conv2D(1, kernel_size, kernel_initializer="Ones")(input)
+                elif kernel_type == "AVG":
+                    output = Conv2D(1, kernel_size, kernel_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])) )(input)
+                else:
+                    raise Exception("invalid kernel_type")
+            elif operation == "DepthwiseConv2D":
+                if kernel_type == "ONES":
+                    output=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
+                elif kernel_type == "AVG":
+                     output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
+                else:
+                    raise Exception("invalid kernel_type")
             else:
                 raise Exception("invalid kernel_type")
-        elif operation == "DepthwiseConv2D":
-            if kernel_type == "ONES":
-                output=DepthwiseConv2D(kernel_size,depthwise_initializer='Ones')(input)
-            elif kernel_type == "AVG":
-                 output=DepthwiseConv2D(kernel_size,depthwise_initializer=Constant(value=1/(kernel_size[0]*kernel_size[1])))(input)
-            else:
-                raise Exception("invalid kernel_type")
-        else:
-            raise Exception("invalid kernel_type")
-        #print(output.shape)
-        lh.end_iteration()
+            #print(output.shape)
+            lh.end_iteration()
         t3 = time()
         output_logger.debug(f"Run interpreter: {t3 - t2}s")     
         t4 = time()
