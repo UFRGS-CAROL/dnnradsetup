@@ -53,7 +53,7 @@ def check_output_against_golden(output, golden,output_logger):
 
 def generate_random_input(input_size,op,output_logger):
 
-    rand_input = np.random.random(input_size)
+    rand_input = np.random.uniform(low=-10,high=10,size=input_size)
     input_file = "input_"+op+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
     output_logger.debug("saved input: "+ input_file + ".npy")
     np.save(input_file, rand_input)
