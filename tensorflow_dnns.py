@@ -224,7 +224,8 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
         #                                                                  dnn_output_tensor_cpu):
         for i, (gold, found) in enumerate(zip(dnn_golden_tensor, dnn_output_tensor_cpu)):
             if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
-                print(print(gold))
+                # print(gold)
+                # print(found)
                 output_errors += 1
                 error_detail = f"img:{current_image} setupit:{setup_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
                 output_logger.error(error_detail)
