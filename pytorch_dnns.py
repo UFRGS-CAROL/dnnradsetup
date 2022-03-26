@@ -161,7 +161,8 @@ def compare_output_with_gold(dnn_output_tensor: torch.tensor, dnn_golden_tensor:
                                                output_logger=output_logger)
     elif dnn_type == DNNType.DETECTION:
         # assert len(dnn_output_tensor) == 1 and len(dnn_golden_tensor) != 0
-        output_errors = compare_detection(dnn_output_dict=dnn_output_tensor, dnn_golden_dict=dnn_golden_tensor,
+        # Pytorch always return a batched detection
+        output_errors = compare_detection(dnn_output_dict=dnn_output_tensor[0], dnn_golden_dict=dnn_golden_tensor[0],
                                           output_logger=output_logger, current_image=current_image)
     dnn_log_helper.log_error_count(output_errors)
     return output_errors
@@ -314,10 +315,11 @@ def main():
         # dnn_gold_tensors = torch.stack(dnn_gold_tensors).to("cpu")
         # make sure everything is on host
         for tensor_d in dnn_gold_tensors:
-            if type(tensor_d) is dict:
-                for place in ["boxes", "scores", "labels"]:
-                    for ttd in tensor_d[place]:
-                        ttd.to("cpu")
+            if type(tensor_d) is list:
+                for p in tensor_d:
+                    for place in ["boxes", "scores", "labels"]:
+                        for ttd in p[place]:
+                            ttd.to("cpu")
             if type(tensor_d) is torch.Tensor:
                 tensor_d.to("cpu")
         torch.save(dnn_gold_tensors, gold_path)
