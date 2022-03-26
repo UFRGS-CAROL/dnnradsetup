@@ -117,7 +117,7 @@ def test_all_jsons(timeout=10):
         with open(file, "r") as fp:
             json_data = json.load(fp)
 
-        for k, v in json_data.items():
+        for v in json_data:
             process = subprocess.Popen(['timeout', str(timeout), v['exec']], stdout=subprocess.PIPE)
             out, err = process.communicate()
             if err:
