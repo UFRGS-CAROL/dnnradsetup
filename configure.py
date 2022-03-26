@@ -118,7 +118,7 @@ def test_all_jsons(timeout=30):
             json_data = json.load(fp)
 
         for v in json_data:
-            subprocess.run(v['exec'], timeout=timeout)
+            subprocess.run("python3 " + v['exec'], timeout=timeout, shell=True)
 
 
 if __name__ == "__main__":
