@@ -9,11 +9,15 @@ from time import time
 from PIL import Image
 from tensorflow.keras.layers import Conv2D, DepthwiseConv2D
 import dnn_log_helper as lh
-from tensorflow import convert_to_tensor, float32
+from tensorflow import convert_to_tensor, float32,equal,reduce_all,less_equal,subtract, Tensor
 from tensorflow.keras.initializers import Constant
 import logging
 import console_logger
 import random
+
+
+ABS_THRESHOLD = 1e-5
+
 def set_input_n_op_n_gold(input_image,gold_file):
 
     input = np.load(input_image)
@@ -36,13 +40,14 @@ def check_output_against_golden(output, golden,output_logger):
     #    temp[0][0][0] += 34.2
     #    output=convert_to_tensor(temp,dtype=float32)
     errors=0
-    for i, (out,gold) in enumerate(zip(output[0][0],golden[0][0])):
-        #print(out)
-        if(out != gold):
-            score_error = "i:"+str(i)+f" score:{out[0]:.6e} g:{gold[0]:.6e}"
-            output_logger.error(score_error)
-            lh.log_error_detail(score_error)
-            errors+=1
+    if(equal(output,golden,ABS_THRESHOLD) == False):
+        for i, (out,gold) in enumerate(zip(output[0][0],golden[0][0])):
+            #print(out)
+            if(out != gold):
+                score_error = "i:"+str(i)+f" score:{out[0]:.6e} g:{gold[0]:.6e}"
+                output_logger.error(score_error)
+                lh.log_error_detail(score_error)
+                errors+=1
     return errors
 
 
@@ -55,6 +60,12 @@ def generate_random_input(input_size,op,output_logger):
 
     return input_file, rand_input
 
+def equal(rhs: Tensor, lhs: Tensor, threshold: float = None) -> bool:
+    if threshold:
+        return bool(
+            reduce_all(less_equal(abs(subtract(rhs, lhs)), threshold)))
+    else:
+        return bool(reduce_all(equal(rhs, lhs)))
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
