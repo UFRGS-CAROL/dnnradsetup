@@ -16,7 +16,7 @@ import console_logger
 import random
 
 
-ABS_THRESHOLD = 1e-5
+ABS_THRESHOLD = 0
 
 def compare_fast(rhs: Tensor, lhs: Tensor, threshold: float = None) -> bool:
     if threshold:
