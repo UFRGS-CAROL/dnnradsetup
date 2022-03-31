@@ -214,7 +214,7 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
             # if random.randint(0,4)==0:
             #    dnn_output_tensor_cpu[0] = 34.2
         else:
-            dnn_golden_tensor = dnn_golden_tensor[0].numpy()
+            dnn_golden_tensor = dnn_golden_tensor[0]
             dnn_output_tensor_cpu = dnn_output_tensor[0].numpy()
             # print(dnn_golden_tensor)
             # print(dnn_output_tensor_cpu)
