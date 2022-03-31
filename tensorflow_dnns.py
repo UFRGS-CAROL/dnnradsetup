@@ -494,10 +494,13 @@ def main():
             # numpy.save(gold_path, dnn_gold_tensors)
             if dnn_type == DNNType.CLASSIFICATION:
                 class_list = [i.numpy() for i in dnn_gold_tensors]
-                pickle_save_file(file_path=gold_path, data=dnn_gold_tensors.numpy())
+                pickle_save_file(file_path=gold_path, data=class_list)
             else:
-                det_dict = {k: dnn_gold_tensors[k].numpy() for k in dnn_gold_tensors}
-                pickle_save_file(file_path=gold_path, data=det_dict)
+                det_list = list()
+                for det in dnn_gold_tensors:
+                    det_dict = {k: det[k].numpy() for k in det}
+                    det_list.append(det_dict)
+                pickle_save_file(file_path=gold_path, data=det_list)
 
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
