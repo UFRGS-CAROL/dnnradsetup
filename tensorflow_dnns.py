@@ -138,9 +138,9 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
             boxes_gold = dnn_golden_dict["detection_boxes"]
             labels_gold = dnn_golden_dict["detection_classes"]
             scores_gold = dnn_golden_dict["detection_scores"]
-            boxes_out = dnn_output_dict["detection_boxes"]
-            labels_out = dnn_output_dict["detection_classes"]
-            scores_out = dnn_output_dict["detection_scores"]
+            boxes_out = dnn_output_dict["detection_boxes"].numpy()
+            labels_out = dnn_output_dict["detection_classes"].numpy()
+            scores_out = dnn_output_dict["detection_scores"].numpy()
             # print(boxes_gold)
             # print(boxes_out)
             # print(boxes_gold.device)
@@ -172,9 +172,9 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
         # It is better compare to a threshold
 
         # Logging the score indexes that in fact have errors
-        if all([equal(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
-                equal(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
-                equal(labels_gold, labels_out)]) is False:
+        if all([equal_numpy(rhs=scores_gold, lhs=scores_out),
+                equal_numpy(rhs=boxes_gold, lhs=boxes_out),
+                equal_numpy(labels_gold, labels_out)]) is False:
             for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
                 if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
                     score_error = f"img:{current_image} scorei:{s_i} g:{score_gold:.6e} o:{score_out:.6e}"
@@ -228,8 +228,7 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
 
         output_errors = 0
         # using the same approach as the detection, compare only the positions that differ
-        if equal_numpy(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu,
-                       threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
+        if equal_numpy(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu) is False:
             output_logger.error("Not equal output tensors")
             if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
                 error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
