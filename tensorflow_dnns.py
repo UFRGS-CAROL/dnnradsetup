@@ -116,88 +116,89 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
                       # copy_tensor_to_cpu_caller: callable, detection_keys: dict = None,
                       use_tflite: bool = False) -> int:
     """ Compare the detections and return the number of errors. Also log on the logfile  """
-    # We use for detection batch always equal to one
-    score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
-    # if detection_keys is None:
-    #     detection_keys = dict(boxes="boxes", scores="scores", labels="labels")
-    if use_tflite:
-        boxes_gold = dnn_golden_dict["boxes"]
-        labels_gold = dnn_golden_dict["labels"]
-        scores_gold = dnn_golden_dict["scores"]
-        boxes_out = dnn_output_dict["boxes"]
-        labels_out = dnn_output_dict["labels"]
-        scores_out = dnn_output_dict["scores"]
-        # if (random.randint(0, 4) == 0):
-        #     scores_out[0] = 1
-        # if (random.randint(0, 4) == 0):
-        #     boxes_out[0][0] = 2
-        # if (random.randint(0, 4) == 0):
-        #     labels_out[0] = 3
-    else:
-        boxes_gold = dnn_golden_dict["detection_boxes"]
-        labels_gold = dnn_golden_dict["detection_classes"]
-        scores_gold = dnn_golden_dict["detection_scores"]
-        boxes_out = dnn_output_dict["detection_boxes"]
-        labels_out = dnn_output_dict["detection_classes"]
-        scores_out = dnn_output_dict["detection_scores"]
-        print(boxes_gold)
-        print(boxes_out)
-        print(boxes_gold.device)
-        print(boxes_out.device)
-        # if random.randint(0, 4) == 0:
-        #     temp = scores_out.numpy()
-        #     temp[0] += 1
-        #     scores_out = tf.convert_to_tensor(temp, dtype=tf.float32)
-        # if random.randint(0, 4) == 0:
-        #     temp = boxes_out.numpy()
-        #     temp[random.randrange(0, len(temp))] += 2
-        #     boxes_out = tf.convert_to_tensor(temp, dtype=tf.float32)
-        #
-        # if random.randint(0, 4) == 0:
-        #     temp = labels_out.numpy()
-        #     temp[random.randrange(0, len(temp))] += 2
-        #     labels_out = tf.convert_to_tensor(temp, dtype=tf.float32)
+    with tensorflow.device('/CPU'):
+        # We use for detection batch always equal to one
+        score_errors_count, labels_errors_count, box_errors_count = 0, 0, 0
+        # if detection_keys is None:
+        #     detection_keys = dict(boxes="boxes", scores="scores", labels="labels")
+        if use_tflite:
+            boxes_gold = dnn_golden_dict["boxes"]
+            labels_gold = dnn_golden_dict["labels"]
+            scores_gold = dnn_golden_dict["scores"]
+            boxes_out = dnn_output_dict["boxes"]
+            labels_out = dnn_output_dict["labels"]
+            scores_out = dnn_output_dict["scores"]
+            # if (random.randint(0, 4) == 0):
+            #     scores_out[0] = 1
+            # if (random.randint(0, 4) == 0):
+            #     boxes_out[0][0] = 2
+            # if (random.randint(0, 4) == 0):
+            #     labels_out[0] = 3
+        else:
+            boxes_gold = dnn_golden_dict["detection_boxes"]
+            labels_gold = dnn_golden_dict["detection_classes"]
+            scores_gold = dnn_golden_dict["detection_scores"]
+            boxes_out = dnn_output_dict["detection_boxes"]
+            labels_out = dnn_output_dict["detection_classes"]
+            scores_out = dnn_output_dict["detection_scores"]
+            # print(boxes_gold)
+            # print(boxes_out)
+            # print(boxes_gold.device)
+            # print(boxes_out.device)
+            # if random.randint(0, 4) == 0:
+            #     temp = scores_out.numpy()
+            #     temp[0] += 1
+            #     scores_out = tf.convert_to_tensor(temp, dtype=tf.float32)
+            # if random.randint(0, 4) == 0:
+            #     temp = boxes_out.numpy()
+            #     temp[random.randrange(0, len(temp))] += 2
+            #     boxes_out = tf.convert_to_tensor(temp, dtype=tf.float32)
+            #
+            # if random.randint(0, 4) == 0:
+            #     temp = labels_out.numpy()
+            #     temp[random.randrange(0, len(temp))] += 2
+            #     labels_out = tf.convert_to_tensor(temp, dtype=tf.float32)
 
-        # # Debug 
-    # print(boxes_out)
-    # print(labels_out)
-    # print(scores_out)
+            # # Debug
+        # print(boxes_out)
+        # print(labels_out)
+        # print(scores_out)
 
-    # print(scores_out)
-    # if(random.randint(0,4)==0):
-    #    scores_out[0] = 1
-    #    boxes_out[0][0] = 2 
-    #    labels_out[0] = 3
-    # It is better compare to a threshold
+        # print(scores_out)
+        # if(random.randint(0,4)==0):
+        #    scores_out[0] = 1
+        #    boxes_out[0][0] = 2
+        #    labels_out[0] = 3
+        # It is better compare to a threshold
 
-    # Logging the score indexes that in fact have errors
-    if all([equal(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
-            equal(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
-            equal(labels_gold, labels_out)]) is False:
-        for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
-            if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
-                score_error = f"img:{current_image} scorei:{s_i} g:{score_gold:.6e} o:{score_out:.6e}"
-                output_logger.error(score_error)
-                dnn_log_helper.log_error_detail(score_error)
-                score_errors_count += 1
-        # Logging the boxes indexes that in fact have errors
-        for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold, boxes_out)):
-            if equal(box_gold, box_out, DETECTION_BOXES_ABS_THRESHOLD) is False:
-                gx1, gx2, gx3, gx4 = box_gold
-                ox1, ox2, ox3, ox4 = box_out
-                box_error = f"img:{current_image} boxi:{b_i:.6e}"
-                box_error += f" gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
-                box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
-                output_logger.error(box_error)
-                dnn_log_helper.log_error_detail(box_error)
-                box_errors_count += 1
-        # Logging the boxes indexes that in fact have errors
-        for l_i, (label_gold, label_out) in enumerate(zip(labels_gold, labels_out)):
-            if label_gold != label_out:
-                label_error = f"img:{current_image} labeli:{l_i} g:{label_gold} o:{label_out}"
-                output_logger.error(label_error)
-                dnn_log_helper.log_error_detail(label_error)
-                labels_errors_count += 1
+        # Logging the score indexes that in fact have errors
+        if all([equal(rhs=scores_gold, lhs=scores_out, threshold=DETECTION_SCORES_ABS_THRESHOLD),
+                equal(rhs=boxes_gold, lhs=boxes_out, threshold=DETECTION_BOXES_ABS_THRESHOLD),
+                equal(labels_gold, labels_out)]) is False:
+            for s_i, (score_gold, score_out) in enumerate(zip(scores_gold, scores_out)):
+                if abs(score_gold - score_out) > DETECTION_SCORES_ABS_THRESHOLD:
+                    score_error = f"img:{current_image} scorei:{s_i} g:{score_gold:.6e} o:{score_out:.6e}"
+                    output_logger.error(score_error)
+                    dnn_log_helper.log_error_detail(score_error)
+                    score_errors_count += 1
+            # Logging the boxes indexes that in fact have errors
+            for b_i, (box_gold, box_out) in enumerate(zip(boxes_gold, boxes_out)):
+                if equal(box_gold, box_out, DETECTION_BOXES_ABS_THRESHOLD) is False:
+                    gx1, gx2, gx3, gx4 = box_gold
+                    ox1, ox2, ox3, ox4 = box_out
+                    box_error = f"img:{current_image} boxi:{b_i:.6e}"
+                    box_error += f" gx1:{gx1:.6e} gx2:{gx2:.6e} gx3:{gx3:.6e} gx4:{gx4:.6e}"
+                    box_error += f" ox1:{ox1:.6e} ox2:{ox2:.6e} ox3:{ox3:.6e} ox4:{ox4:.6e}"
+                    output_logger.error(box_error)
+                    dnn_log_helper.log_error_detail(box_error)
+                    box_errors_count += 1
+            # Logging the boxes indexes that in fact have errors
+            for l_i, (label_gold, label_out) in enumerate(zip(labels_gold, labels_out)):
+                if label_gold != label_out:
+                    label_error = f"img:{current_image} labeli:{l_i} g:{label_gold} o:{label_out}"
+                    output_logger.error(label_error)
+                    dnn_log_helper.log_error_detail(label_error)
+                    labels_errors_count += 1
 
     return score_errors_count + box_errors_count + labels_errors_count
 
@@ -205,54 +206,55 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
 def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration: int, current_image: str,
                            output_logger: logging.Logger, use_tflite: bool) -> int:
     # Make sure that they are on CPU
-    if use_tflite:
-        dnn_output_tensor_cpu = dnn_output_tensor
-        # # Debug injection
+    with tensorflow.device('/CPU'):
+        if use_tflite:
+            dnn_output_tensor_cpu = dnn_output_tensor
+            # # Debug injection
 
-        # if random.randint(0,4)==0:
-        #    dnn_output_tensor_cpu[0] = 34.2
-    else:
-        dnn_golden_tensor = dnn_golden_tensor[0]
-        dnn_output_tensor_cpu = dnn_output_tensor[0]
-        print(dnn_golden_tensor)
-        print(dnn_output_tensor_cpu)
-        print(dnn_golden_tensor.device)
-        print(dnn_output_tensor_cpu.device)
-        # if random.randint(0,4)==0:
-        #    temp=dnn_output_tensor_cpu.numpy()
-        #    temp[0] = 34.2
-        #    dnn_output_tensor_cpu=tf.convert_to_tensor(temp,dtype=tf.float32)
-    # print(dnn_output_tensor_cpu)
+            # if random.randint(0,4)==0:
+            #    dnn_output_tensor_cpu[0] = 34.2
+        else:
+            dnn_golden_tensor = dnn_golden_tensor[0]
+            dnn_output_tensor_cpu = dnn_output_tensor[0]
+            print(dnn_golden_tensor)
+            print(dnn_output_tensor_cpu)
+            print(dnn_golden_tensor.device)
+            print(dnn_output_tensor_cpu.device)
+            # if random.randint(0,4)==0:
+            #    temp=dnn_output_tensor_cpu.numpy()
+            #    temp[0] = 34.2
+            #    dnn_output_tensor_cpu=tf.convert_to_tensor(temp,dtype=tf.float32)
+        # print(dnn_output_tensor_cpu)
 
-    output_errors = 0
-    # using the same approach as the detection, compare only the positions that differ
-    if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
-        output_logger.error("Not equal output tensors")
-        if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
-            error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
-            output_logger.error(error_detail)
-            dnn_log_helper.log_error_detail(error_detail)
-
-        # for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
-        #                                                                  dnn_output_tensor_cpu):
-        for i, (gold, found) in enumerate(zip(dnn_golden_tensor, dnn_output_tensor_cpu)):
-            if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
-                # print(gold)
-                # print(found)
-                output_errors += 1
-                error_detail = f"img:{current_image} setupit:{setup_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
+        output_errors = 0
+        # using the same approach as the detection, compare only the positions that differ
+        if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
+            output_logger.error("Not equal output tensors")
+            if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
+                error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
                 output_logger.error(error_detail)
                 dnn_log_helper.log_error_detail(error_detail)
-        # else:
-        #    for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
-        #                                                                  dnn_output_tensor_cpu):
-        #        for i, (gold, found) in enumerate(zip(current_gold_tensor, current_output_tensor)):
-        #            if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
-        #                output_errors += 1
-        #                error_detail = f"img:{img_name_i} setupit:{setup_iteration} "
-        #                error_detail += f"batchti:{batch_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
-        #                output_logger.error(error_detail)
-        #                dnn_log_helper.log_error_detail(error_detail)
+
+            # for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
+            #                                                                  dnn_output_tensor_cpu):
+            for i, (gold, found) in enumerate(zip(dnn_golden_tensor, dnn_output_tensor_cpu)):
+                if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
+                    # print(gold)
+                    # print(found)
+                    output_errors += 1
+                    error_detail = f"img:{current_image} setupit:{setup_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
+                    output_logger.error(error_detail)
+                    dnn_log_helper.log_error_detail(error_detail)
+            # else:
+            #    for img_name_i, current_gold_tensor, current_output_tensor in zip(current_image_names, dnn_golden_tensor,
+            #                                                                  dnn_output_tensor_cpu):
+            #        for i, (gold, found) in enumerate(zip(current_gold_tensor, current_output_tensor)):
+            #            if abs(gold - found) > CLASSIFICATION_ABS_THRESHOLD:
+            #                output_errors += 1
+            #                error_detail = f"img:{img_name_i} setupit:{setup_iteration} "
+            #                error_detail += f"batchti:{batch_iteration} i:{i} g:{gold:.6e} o:{found:.6e}"
+            #                output_logger.error(error_detail)
+            #                dnn_log_helper.log_error_detail(error_detail)
     return output_errors
 
 
@@ -269,16 +271,15 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                              use_tflite: bool) -> int:
     output_errors = 0
     # Make sure that they are on CPU
-    with tensorflow.device('/CPU'):
-        if dnn_type == DNNType.CLASSIFICATION:
-            output_errors = compare_classification(dnn_output_tensor=dnn_output_tensor,
-                                                   dnn_golden_tensor=dnn_golden_tensor,
-                                                   setup_iteration=setup_iteration, current_image=current_image,
-                                                   output_logger=output_logger, use_tflite=use_tflite)
-        elif dnn_type == DNNType.DETECTION:
-            output_errors = compare_detection(dnn_output_dict=dnn_output_tensor, dnn_golden_dict=dnn_golden_tensor,
-                                              current_image=current_image, output_logger=output_logger,
-                                              use_tflite=use_tflite)
+    if dnn_type == DNNType.CLASSIFICATION:
+        output_errors = compare_classification(dnn_output_tensor=dnn_output_tensor,
+                                               dnn_golden_tensor=dnn_golden_tensor,
+                                               setup_iteration=setup_iteration, current_image=current_image,
+                                               output_logger=output_logger, use_tflite=use_tflite)
+    elif dnn_type == DNNType.DETECTION:
+        output_errors = compare_detection(dnn_output_dict=dnn_output_tensor, dnn_golden_dict=dnn_golden_tensor,
+                                          current_image=current_image, output_logger=output_logger,
+                                          use_tflite=use_tflite)
     dnn_log_helper.log_error_count(output_errors)
 
     return output_errors
