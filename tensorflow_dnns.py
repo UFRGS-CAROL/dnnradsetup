@@ -140,6 +140,10 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
         boxes_out = dnn_output_dict["detection_boxes"]
         labels_out = dnn_output_dict["detection_classes"]
         scores_out = dnn_output_dict["detection_scores"]
+        print(boxes_gold)
+        print(boxes_out)
+        print(boxes_gold.device)
+        print(boxes_out.device)
         # if random.randint(0, 4) == 0:
         #     temp = scores_out.numpy()
         #     temp[0] += 1
@@ -210,6 +214,10 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
     else:
         dnn_golden_tensor = dnn_golden_tensor[0]
         dnn_output_tensor_cpu = dnn_output_tensor[0]
+        print(dnn_golden_tensor)
+        print(dnn_output_tensor_cpu)
+        print(dnn_golden_tensor.device)
+        print(dnn_output_tensor_cpu.device)
         # if random.randint(0,4)==0:
         #    temp=dnn_output_tensor_cpu.numpy()
         #    temp[0] = 34.2
@@ -260,7 +268,6 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                              dnn_type: DNNType, setup_iteration: int, current_image: str, output_logger: logging.Logger,
                              use_tflite: bool) -> int:
     output_errors = 0
-    tensorflow.debugging.set_log_device_placement(True)
     # Make sure that they are on CPU
     with tensorflow.device('/CPU'):
         if dnn_type == DNNType.CLASSIFICATION:
@@ -273,7 +280,6 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                               current_image=current_image, output_logger=output_logger,
                                               use_tflite=use_tflite)
     dnn_log_helper.log_error_count(output_errors)
-    tensorflow.debugging.set_log_device_placement(False)
 
     return output_errors
 
