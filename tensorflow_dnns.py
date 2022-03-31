@@ -228,7 +228,8 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
 
         output_errors = 0
         # using the same approach as the detection, compare only the positions that differ
-        if equal_numpy(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
+        if equal_numpy(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu,
+                       threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
             output_logger.error("Not equal output tensors")
             if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
                 error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
@@ -491,7 +492,12 @@ def main():
         with tensorflow.device("/CPU"):
             # dnn_gold_tensors = numpy.array(dnn_gold_tensors)
             # numpy.save(gold_path, dnn_gold_tensors)
-            pickle_save_file(file_path=gold_path, data=dnn_gold_tensors)
+            if dnn_type == DNNType.CLASSIFICATION:
+                pickle_save_file(file_path=gold_path, data=dnn_gold_tensors.numpy())
+            else:
+                det_dict = {k: dnn_gold_tensors[k].numpy() for k in dnn_gold_tensors}
+                pickle_save_file(file_path=gold_path, data=det_dict)
+
             timer.toc()
             output_logger.debug(f"Time necessary to save the golden outputs: {timer}")
             output_logger.debug(f"Accuracy measure")
