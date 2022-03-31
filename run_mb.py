@@ -16,7 +16,14 @@ import console_logger
 import random
 
 
-ABS_THRESHOLD = 1e-5
+ABS_THRESHOLD = 0
+
+def compare_fast(rhs: Tensor, lhs: Tensor, threshold: float = None) -> bool:
+    if threshold:
+        return bool(
+            reduce_all(less_equal(abs(subtract(rhs, lhs)), threshold)))
+    else:
+        return bool(reduce_all(equal(rhs, lhs)))
 
 def set_input_n_op_n_gold(input_image,gold_file):
 
@@ -40,7 +47,7 @@ def check_output_against_golden(output, golden,output_logger):
     #    temp[0][0][0] += 34.2
     #    output=convert_to_tensor(temp,dtype=float32)
     errors=0
-    if(equal(output,golden,ABS_THRESHOLD) == False):
+    if(compare_fast(output,golden,ABS_THRESHOLD) == False):
         for i, (out,gold) in enumerate(zip(output[0][0],golden[0][0])):
             #print(out)
             if(out != gold):
@@ -53,19 +60,14 @@ def check_output_against_golden(output, golden,output_logger):
 
 def generate_random_input(input_size,op,output_logger):
 
-    rand_input = np.random.random(input_size)
+    rand_input = np.random.uniform(low=-10,high=10,size=input_size)
     input_file = "input_"+op+"_"+str(input_size[0])+"_"+str(input_size[1])+"_"+str(input_size[2])+"_"+str(input_size[3])
     output_logger.debug("saved input: "+ input_file + ".npy")
     np.save(input_file, rand_input)
 
     return input_file, rand_input
 
-def equal(rhs: Tensor, lhs: Tensor, threshold: float = None) -> bool:
-    if threshold:
-        return bool(
-            reduce_all(less_equal(abs(subtract(rhs, lhs)), threshold)))
-    else:
-        return bool(reduce_all(equal(rhs, lhs)))
+
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
