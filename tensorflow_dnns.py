@@ -216,10 +216,10 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
         else:
             dnn_golden_tensor = dnn_golden_tensor[0]
             dnn_output_tensor_cpu = dnn_output_tensor[0]
-            print(dnn_golden_tensor)
-            print(dnn_output_tensor_cpu)
-            print(dnn_golden_tensor.device)
-            print(dnn_output_tensor_cpu.device)
+            # print(dnn_golden_tensor)
+            # print(dnn_output_tensor_cpu)
+            # print(dnn_golden_tensor.device)
+            # print(dnn_output_tensor_cpu.device)
             # if random.randint(0,4)==0:
             #    temp=dnn_output_tensor_cpu.numpy()
             #    temp[0] = 34.2
