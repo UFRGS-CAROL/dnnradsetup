@@ -214,8 +214,8 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
             # if random.randint(0,4)==0:
             #    dnn_output_tensor_cpu[0] = 34.2
         else:
-            dnn_golden_tensor = dnn_golden_tensor[0]
-            dnn_output_tensor_cpu = dnn_output_tensor[0]
+            dnn_golden_tensor = dnn_golden_tensor[0].numpy()
+            dnn_output_tensor_cpu = dnn_output_tensor[0].numpy()
             # print(dnn_golden_tensor)
             # print(dnn_output_tensor_cpu)
             # print(dnn_golden_tensor.device)
@@ -228,7 +228,7 @@ def compare_classification(dnn_output_tensor, dnn_golden_tensor, setup_iteration
 
         output_errors = 0
         # using the same approach as the detection, compare only the positions that differ
-        if equal(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
+        if equal_numpy(rhs=dnn_golden_tensor, lhs=dnn_output_tensor_cpu, threshold=CLASSIFICATION_ABS_THRESHOLD) is False:
             output_logger.error("Not equal output tensors")
             if dnn_golden_tensor.shape != dnn_output_tensor_cpu.shape:
                 error_detail = f"DIFF_SIZE g:{dnn_golden_tensor.shape} o:{dnn_output_tensor_cpu.shape}"
@@ -264,6 +264,14 @@ def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = Non
             tensorflow.reduce_all(tensorflow.less_equal(tensorflow.abs(tensorflow.subtract(rhs, lhs)), threshold)))
     else:
         return bool(tensorflow.reduce_all(tensorflow.equal(rhs, lhs)))
+
+
+def equal_numpy(rhs: numpy.array, lhs: numpy.array, threshold: float = None) -> bool:
+    if threshold:
+        return bool(
+            numpy.reduce_all(numpy.less_equal(numpy.abs(numpy.subtract(rhs, lhs)), threshold)))
+    else:
+        return bool(numpy.reduce_all(numpy.equal(rhs, lhs)))
 
 
 def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor,
