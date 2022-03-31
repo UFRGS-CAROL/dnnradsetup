@@ -135,10 +135,10 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
         #     labels_out[0] = 3
     else:
         boxes_gold = dnn_golden_dict["detection_boxes"]
-        labels_gold = dnn_golden_dict["detection_labels"]
+        labels_gold = dnn_golden_dict["detection_classes"]
         scores_gold = dnn_golden_dict["detection_scores"]
         boxes_out = dnn_output_dict["detection_boxes"]
-        labels_out = dnn_output_dict["detection_labels"]
+        labels_out = dnn_output_dict["detection_classes"]
         scores_out = dnn_output_dict["detection_scores"]
         # if random.randint(0, 4) == 0:
         #     temp = scores_out.numpy()
@@ -260,6 +260,7 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                              dnn_type: DNNType, setup_iteration: int, current_image: str, output_logger: logging.Logger,
                              use_tflite: bool) -> int:
     output_errors = 0
+    tensorflow.debugging.set_log_device_placement(True)
     # Make sure that they are on CPU
     with tensorflow.device('/CPU'):
         if dnn_type == DNNType.CLASSIFICATION:
@@ -272,6 +273,8 @@ def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_te
                                               current_image=current_image, output_logger=output_logger,
                                               use_tflite=use_tflite)
     dnn_log_helper.log_error_count(output_errors)
+    tensorflow.debugging.set_log_device_placement(False)
+
     return output_errors
 
 
@@ -317,13 +320,11 @@ def verify_network_accuracy(batched_output: Union[numpy.array, list], dnn_type: 
     from verify_accuracy import verify_classification_accuracy, verify_detection_accuracy
     if use_tflite is False:
         if dnn_type == DNNType.CLASSIFICATION:
-            if dnn_type == DNNType.CLASSIFICATION:
-                pred = list()
-                if dnn_type == DNNType.CLASSIFICATION:
-                    for img, x in zip(img_names, batched_output):
-                        label = tensorflow.argmax(x, 1)
-                        pred.append({"img_name": img, "class_id_predicted": int(label[0])})
-                verify_classification_accuracy(pred, ground_truth_csv)
+            pred = list()
+            for img, x in zip(img_names, batched_output):
+                label = tensorflow.argmax(x, 1)
+                pred.append({"img_name": img, "class_id_predicted": int(label[0])})
+            verify_classification_accuracy(pred, ground_truth_csv)
         else:
             pred = list()
             verify_detection_accuracy(pred, ground_truth_csv)
