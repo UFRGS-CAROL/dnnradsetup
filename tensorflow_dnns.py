@@ -269,9 +269,9 @@ def equal(rhs: tensorflow.Tensor, lhs: tensorflow.Tensor, threshold: float = Non
 def equal_numpy(rhs: numpy.array, lhs: numpy.array, threshold: float = None) -> bool:
     if threshold:
         return bool(
-            numpy.reduce_all(numpy.less_equal(numpy.abs(numpy.subtract(rhs, lhs)), threshold)))
+            numpy.all(numpy.less_equal(numpy.abs(numpy.subtract(rhs, lhs)), threshold)))
     else:
-        return bool(numpy.reduce_all(numpy.equal(rhs, lhs)))
+        return bool(numpy.all(numpy.equal(rhs, lhs)))
 
 
 def compare_output_with_gold(dnn_output_tensor: tensorflow.Tensor, dnn_golden_tensor: tensorflow.Tensor,
