@@ -22,6 +22,11 @@ import dnn_log_helper
 import tensorflow_lite_utils
 from common_tf_and_pt import *
 
+FORCE_GPU = True
+NUM_THREAD = 6
+tensorflow.config.threading.set_inter_op_parallelism_threads(num_threads=NUM_THREAD)
+tensorflow.config.threading.set_intra_op_parallelism_threads(num_threads=NUM_THREAD)
+
 DNN_MODELS = {
     INCEPTION_V3: {
         "model": inception_v3.InceptionV3,
@@ -129,12 +134,12 @@ def compare_detection(dnn_output_dict: dict, dnn_golden_dict: dict, current_imag
         # if (random.randint(0, 4) == 0):
         #     labels_out[0] = 3
     else:
-        boxes_gold = dnn_golden_dict["detection_boxes"][0]
-        labels_gold = dnn_golden_dict["detection_labels"][0]
-        scores_gold = dnn_golden_dict["detection_scores"][0]
-        boxes_out = dnn_output_dict["detection_boxes"][0]
-        labels_out = dnn_output_dict["detection_labels"][0]
-        scores_out = dnn_output_dict["detection_scores"][0]
+        boxes_gold = dnn_golden_dict["detection_boxes"]
+        labels_gold = dnn_golden_dict["detection_labels"]
+        scores_gold = dnn_golden_dict["detection_scores"]
+        boxes_out = dnn_output_dict["detection_boxes"]
+        labels_out = dnn_output_dict["detection_labels"]
+        scores_out = dnn_output_dict["detection_scores"]
         # if random.randint(0, 4) == 0:
         #     temp = scores_out.numpy()
         #     temp[0] += 1
@@ -344,7 +349,8 @@ def main():
     if tensorflow.config.list_physical_devices('GPU'):
         dnn_log_helper.set_iter_interval_print(30)
         device = "/GPU"
-
+    if FORCE_GPU:
+        assert tensorflow.config.list_physical_devices('GPU'), f"GPU NOT PRESENT AND FORCE_GPU SET TO {FORCE_GPU}"
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")
