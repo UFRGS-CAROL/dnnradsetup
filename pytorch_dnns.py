@@ -14,6 +14,8 @@ import console_logger
 import dnn_log_helper
 from common_tf_and_pt import *
 
+FORCE_GPU = False
+
 COMMON_NORMALIZATION = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 DNN_MODELS = {
     # Check the spreadsheet to more information
@@ -215,9 +217,10 @@ def verify_network_accuracy(batched_output: torch.tensor, dnn_type: DNNType, img
 def main():
     # Check the available device
     device = "cpu"
-    if torch.cuda.is_available():
+    if FORCE_GPU:
         device = "cuda:0"
         dnn_log_helper.set_iter_interval_print(30)
+
     timer = Timer()
     timer.tic()
     main_logger_name = str(os.path.basename(__file__)).replace(".py", "")

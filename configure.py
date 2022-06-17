@@ -118,6 +118,7 @@ def test_all_jsons(timeout=30):
             json_data = json.load(fp)
 
         for v in json_data:
+            print("EXECUTING", v["exec"])
             os.system(v['exec'] + "&")
             time.sleep(timeout)
             os.system(v["killcmd"])
